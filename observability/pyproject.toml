@@ -1,0 +1,25 @@
+[project]
+name = "aintegrator-observability"
+version = "1.0.0"
+description = "Redacted OpenTelemetry spans and run correlation for AIntegrator"
+requires-python = ">=3.12"
+dependencies = [
+    "opentelemetry-api>=1.25",
+]
+
+[project.scripts]
+aintegrator-cost-report = "aintegrator_observability.cost_report:main"
+
+[project.optional-dependencies]
+# Local/CI runs stay offline; deploy the exporter with `uv sync --extra otlp`.
+otlp = [
+    "opentelemetry-sdk>=1.25",
+    "opentelemetry-exporter-otlp>=1.25",
+]
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/aintegrator_observability"]

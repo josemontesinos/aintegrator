@@ -9,6 +9,7 @@ from typing import Protocol
 from aintegrator_integration.factory import build_service
 from aintegrator_integration.security import ApprovalService, Redactor
 from aintegrator_integration.service import ConnectivityService
+from aintegrator_observability import Tracer, get_tracer
 
 from aintegrator_agent.approval import ApprovalPolicy, ApprovalPolicyExecutor
 from aintegrator_agent.config import AgentSettings
@@ -35,6 +36,7 @@ async def build_agent(
     executor: ToolExecutor | None = None,
     llm_client: ClosableLLMClient | None = None,
     approve: ApprovalPolicy = "ask",
+    tracer: Tracer | None = None,
 ) -> AsyncIterator[AgentLoop]:
     """Yield a loop wired to MCP tools and close all owned resources afterwards.
 
@@ -42,7 +44,8 @@ async def build_agent(
     Production uses an Anthropic client and a stdio MCP server. The approval
     wrapper is always applied: even an injected executor must obey ``--approve``.
     """
-    runtime = service or build_service()
+    active_tracer = tracer or get_tracer()
+    runtime = service or build_service(tracer=active_tracer)
     owns_service = service is None
     llm: ClosableLLMClient = llm_client or AnthropicLLM(
         api_key=settings.llm_api_key,
@@ -66,6 +69,7 @@ async def build_agent(
                 max_steps=settings.agent_max_steps,
                 cost_model=cost_model,
                 redactor=redactor,
+                tracer=active_tracer,
             )
         else:
             async with MCPToolExecutor.connect_stdio() as mcp_tools:

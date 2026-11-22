@@ -11,6 +11,7 @@ from collections.abc import Sequence
 from aintegrator_integration.domain import AIntegratorError
 from aintegrator_integration.factory import build_service
 from aintegrator_integration.security import ApprovalService
+from aintegrator_observability import configure_tracing
 
 from aintegrator_agent import __version__
 from aintegrator_agent.agent import build_agent
@@ -152,6 +153,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.print_help()
         return 0
 
+    configure_tracing(service_name="aintegrator-agent")
     settings = get_agent_settings()
     if args.command == "approvals":
         return asyncio.run(_manage_approvals(args))

@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 
+from aintegrator_observability import configure_tracing
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
@@ -38,6 +39,7 @@ def create_app(
     service: ConnectivityService | None = None,
     settings: Settings | None = None,
 ) -> FastAPI:
+    configure_tracing(service_name="aintegrator-webhook")
     configuration = settings or get_settings()
     app = FastAPI(title="AIntegrator webhook receiver", version="0.1.0")
 

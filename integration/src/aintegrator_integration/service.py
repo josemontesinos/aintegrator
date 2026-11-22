@@ -14,6 +14,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
+from aintegrator_observability import Tracer, get_tracer, traced
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from aintegrator_integration.config import Settings, get_settings
@@ -67,12 +68,14 @@ class ConnectivityService:
         settings: Settings | None = None,
         clock: Clock | None = None,
         engine: AsyncEngine | None = None,
+        tracer: Tracer | None = None,
     ) -> None:
         self.gateways = gateways
         self.session_maker = session_maker
         self.settings = settings or get_settings()
         self.clock: Clock = clock or SystemClock()
         self._engine = engine
+        self.tracer: Tracer = tracer or get_tracer()
 
     def _utcnow(self) -> datetime:
         return datetime.now(UTC)
@@ -130,6 +133,10 @@ class ConnectivityService:
         return order.model_copy(update=updates)
 
     # -- eligibility ----------------------------------------------------
+    @traced(
+        "integration.eligibility",
+        attributes=lambda self, address: {"providers": len(self.gateways)},
+    )
     async def check_eligibility(self, address: Address) -> list[EligibilityResult]:
         """Fan out with per-provider timeouts; partial failure is a normal result."""
         tasks = [
@@ -207,6 +214,13 @@ class ConnectivityService:
         return result
 
     # -- orders ----------------------------------------------------------
+    @traced(
+        "integration.create_order",
+        attributes=lambda self, intent: {
+            "provider": intent.offer.provider,
+            "idempotent": bool(intent.idempotency_key),
+        },
+    )
     async def create_order(self, intent: OrderIntent) -> Order:
         operation = "create_order"
         request_hash = _intent_hash(intent)
@@ -387,6 +401,13 @@ class ConnectivityService:
             await Repository(session).save_order(final)
         return final
 
+    @traced(
+        "integration.webhook",
+        attributes=lambda self, *args, **kwargs: {
+            "provider": kwargs.get("provider", args[0] if args else "unknown"),
+            "event_type": kwargs.get("event_type", args[1] if len(args) > 1 else "unknown"),
+        },
+    )
     async def apply_webhook_event(
         self,
         provider: str,
@@ -411,6 +432,13 @@ class ConnectivityService:
             await repository.save_order(updated)
             return updated
 
+    @traced(
+        "integration.reconcile",
+        attributes=lambda self, order: {
+            "provider": order.provider,
+            "status": order.status.value,
+        },
+    )
     async def reconcile_order(self, order: Order) -> Order:
         """Ask the provider for its truth and converge the local state machine."""
         gateway = self._get_gateway(order.provider)

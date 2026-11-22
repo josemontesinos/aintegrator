@@ -13,6 +13,7 @@ import time
 from typing import Any
 from uuid import UUID, uuid4
 
+from aintegrator_observability import Tracer, current_run_id, get_tracer
 from pydantic import BaseModel, Field, ValidationError
 
 from aintegrator_integration.domain import (
@@ -157,10 +158,12 @@ class ToolOperations:
         *,
         run_id: str | None = None,
         security: ToolSecurity | None = None,
+        tracer: Tracer | None = None,
     ) -> None:
         self._service = service
         self._run_id = run_id or "mcp"
         self.security = security or build_tool_security(service.session_maker, service.settings)
+        self.tracer: Tracer = tracer or get_tracer()
 
     async def execute(self, name: str, arguments: dict[str, Any]) -> str:
         """Every call is profile-checked, audited and returned as structured JSON."""
@@ -169,45 +172,66 @@ class ToolOperations:
         dispatch_arguments = {
             key: value for key, value in arguments.items() if key != "approval_id"
         }
+        span_run_id = current_run_id() or self._run_id
         payload: dict[str, Any]
-        try:
-            self.security.check_tool(name)
-            payload = await self._dispatch(name, dispatch_arguments, approval_id)
-        except ApprovalRequired as exc:
-            approval_id = exc.approval_id
-            payload = {
-                "ok": False,
-                "error": {
-                    "code": exc.code,
-                    "message": exc.message,
-                    "retryable": exc.retryable,
-                    "details": {
-                        "approval_id": exc.approval_id,
-                        "expires_at": exc.expires_at.isoformat(),
-                        "summary": exc.summary,
-                        "call_arguments": exc.call_arguments,
-                    },
-                },
-            }
-        except ValidationError as exc:
-            payload = _error(f"invalid arguments: {exc.errors()}")
-        except AIntegratorError as exc:
-            payload = _error(exc.message, code=exc.code, retryable=exc.retryable)
-        except (ValueError, TypeError) as exc:
-            payload = _error(str(exc))
-        except Exception as exc:  # pragma: no cover - defensive tool boundary
-            payload = _error(f"unexpected tool failure: {type(exc).__name__}")
+        with self.tracer.start_span(
+            "integration.tool",
+            {
+                "tool": name,
+                "run_id": span_run_id,
+                "has_approval": isinstance(approval_id, str),
+            },
+        ) as span:
+            try:
+                try:
+                    self.security.check_tool(name)
+                    payload = await self._dispatch(name, dispatch_arguments, approval_id)
+                except ApprovalRequired as exc:
+                    approval_id = exc.approval_id
+                    payload = {
+                        "ok": False,
+                        "error": {
+                            "code": exc.code,
+                            "message": exc.message,
+                            "retryable": exc.retryable,
+                            "details": {
+                                "approval_id": exc.approval_id,
+                                "expires_at": exc.expires_at.isoformat(),
+                                "summary": exc.summary,
+                                "call_arguments": exc.call_arguments,
+                            },
+                        },
+                    }
+                except ValidationError as exc:
+                    payload = _error(f"invalid arguments: {exc.errors()}")
+                except AIntegratorError as exc:
+                    payload = _error(exc.message, code=exc.code, retryable=exc.retryable)
+                except (ValueError, TypeError) as exc:
+                    payload = _error(str(exc))
+                except Exception as exc:  # pragma: no cover - defensive tool boundary
+                    payload = _error(f"unexpected tool failure: {type(exc).__name__}")
 
-        result = _json(payload)
-        await self.security.audit.record(
-            run_id=self._run_id,
-            tool=name,
-            arguments=dispatch_arguments,
-            result=result,
-            approval_id=approval_id if isinstance(approval_id, str) else None,
-            duration_ms=(time.perf_counter() - started) * 1000,
-        )
-        return self.security.redactor.text(result)
+                duration_ms = (time.perf_counter() - started) * 1000
+                error = payload.get("error")
+                error_code = error.get("code", "") if isinstance(error, dict) else ""
+                span.set_attribute("duration_ms", round(duration_ms, 3))
+                span.set_attribute("error_code", error_code)
+                span.set_status("error" if error_code else "ok")
+
+                result = _json(payload)
+                await self.security.audit.record(
+                    run_id=self._run_id,
+                    tool=name,
+                    arguments=dispatch_arguments,
+                    result=result,
+                    approval_id=approval_id if isinstance(approval_id, str) else None,
+                    duration_ms=duration_ms,
+                )
+                return self.security.redactor.text(result)
+            except Exception as exc:
+                span.record_exception(exc)
+                span.set_status("error", type(exc).__name__)
+                raise
 
     async def _dispatch(
         self, name: str, arguments: dict[str, Any], approval_id: Any

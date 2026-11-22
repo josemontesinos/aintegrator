@@ -16,8 +16,12 @@ build/
 *.sqlite3
 data/
 evals/reports/*.json
+!evals/reports/latest.json
 evals/reports/*.md
 !evals/reports/.gitkeep
 rag/index.json
+.terraform/
+*.tfstate
+*.tfstate.*
 .DS_Store
 .idea/

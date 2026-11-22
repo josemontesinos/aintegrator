@@ -9,6 +9,7 @@ ENV UV_COMPILE_BYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 COPY . .
-RUN uv sync --all-packages --frozen
+# The otlp extra is only for container runs: OTEL_ENABLED stays false by default.
+RUN uv sync --all-packages --frozen --extra otlp
 
 ENV PATH="/app/.venv/bin:${PATH}"

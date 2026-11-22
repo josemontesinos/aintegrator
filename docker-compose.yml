@@ -1,5 +1,6 @@
-# Phase 1: PostgreSQL, the three simulated providers, the webhook receiver and
-# the database-driven reconciler. All data and credentials are fictional.
+# Local stack: PostgreSQL, the three simulated providers, the webhook receiver,
+# the database-driven reconciler and an opt-in OTLP collector + Jaeger UI.
+# All data and credentials are fictional.
 x-integration-env: &integration-env
   DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-aintegrator}:${POSTGRES_PASSWORD:-aintegrator}@postgres:5432/${POSTGRES_DB:-aintegrator}
   FIBERNET_BASE_URL: http://fibernet:8001
@@ -12,6 +13,8 @@ x-integration-env: &integration-env
   SKYLINK_API_KEY: ${SKYLINK_API_KEY:-skylink-key}
   SKYLINK_WEBHOOK_SECRET: ${SKYLINK_WEBHOOK_SECRET:-skylink-secret}
   WEBHOOK_RECEIVER_BASE_URL: http://webhook:8000
+  OTEL_ENABLED: ${OTEL_ENABLED:-false}
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
 
 services:
   postgres:
@@ -130,6 +133,26 @@ services:
         condition: service_healthy
       skylink:
         condition: service_healthy
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.111.0
+    container_name: aintegrator-otel-collector
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./infra/otel/collector-config.yaml:/etc/otel-collector-config.yaml:ro
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    depends_on:
+      - jaeger
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    container_name: aintegrator-jaeger
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"
 
 volumes:
   postgres_data:

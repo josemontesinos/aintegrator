@@ -1,5 +1,5 @@
 # uv workspace root. Each package under providers/, plus integration/, mcp_server/,
-# agent/, evals/ and rag/, owns its own pyproject.toml and its own tests.
+# agent/, evals/, rag/ and observability/, owns its own pyproject.toml and tests.
 [tool.uv.workspace]
 members = [
     "providers/provider_common",
@@ -11,6 +11,7 @@ members = [
     "agent",
     "evals",
     "rag",
+    "observability",
 ]
 
 [dependency-groups]
@@ -49,18 +50,23 @@ mypy_path = [
     "agent/src",
     "evals/src",
     "rag/src",
+    "observability/src",
 ]
 
 # Strict only where the spec asks for it. Other packages get the defaults.
 [[tool.mypy.overrides]]
-module = ["aintegrator_integration", "aintegrator_integration.*", "aintegrator_agent", "aintegrator_agent.*"]
+module = [
+    "aintegrator_integration", "aintegrator_integration.*",
+    "aintegrator_agent", "aintegrator_agent.*",
+    "aintegrator_observability", "aintegrator_observability.*",
+]
 strict = true
 
 # Libraries without type hints that later phases import.
 [[tool.mypy.overrides]]
 module = [
     "zeep.*", "flask.*", "django.*", "rest_framework.*", "mcp.*",
-    "sentence_transformers.*", "asyncpg.*", "yaml.*",
+    "sentence_transformers.*", "asyncpg.*", "yaml.*", "opentelemetry.*",
 ]
 ignore_missing_imports = true
 
@@ -74,6 +80,8 @@ testpaths = [
     "agent",
     "evals",
     "rag",
+    "observability",
+    "infra",
 ]
 norecursedirs = ["src", ".venv", ".git", "migrations"]
 markers = [

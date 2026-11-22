@@ -10,7 +10,7 @@ All domain data is fictional. No real providers, telecom specifications or emplo
 ## Status
 
 This repository is built phase by phase; each phase ends with a green CI, an updated README and a
-git tag. **Current phase: 6 — RAG (`v0.6-rag`).**
+git tag. **All phases are complete: phase 7 — deployment & observability (`v1.0`).**
 
 | Phase | Deliverable | Tag | Status |
 | --- | --- | --- | --- |
@@ -21,7 +21,7 @@ git tag. **Current phase: 6 — RAG (`v0.6-rag`).**
 | 4 | Security controls | `v0.4-security` | done |
 | 5 | Evals (30+ cases, cassettes) | `v0.5-evals` | done |
 | 6 | RAG over provider docs | `v0.6-rag` | done |
-| 7 | AWS/Terraform, tracing, cost report | `v1.0` | planned |
+| 7 | AWS/Terraform, tracing, cost report | `v1.0` | done |
 
 ## Architecture
 
@@ -35,7 +35,13 @@ flowchart LR
     Integration -->|HTTP| A[fibernet A]
     Integration -->|HTTP/SOAP| B[legacytel B]
     Integration -->|HTTP + webhooks| C[skylink C]
+    Agent -.->|redacted spans| Obs[observability]
+    Integration -.->|redacted spans| Obs
+    Obs -.->|optional OTLP| Collector[OTLP collector / Jaeger or X-Ray]
 ```
+
+The dotted edges are opt-in: `OTEL_ENABLED` defaults to false, so offline tests, evals and RAG stay
+deterministic.
 
 Dependencies flow one way; import-linter enforces this in CI. See
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for details and sequence diagrams.
@@ -86,9 +92,11 @@ Requires Python 3.12, [uv](https://docs.astral.sh/uv/), Docker and GNU make.
 cp .env.example .env
 make install       # uv sync --all-packages
 make check         # lint, format, strict typing, import rules, unit tests
-make eval          # 34 deterministic cases x 3 repeats, checked against a baseline
+make eval          # 34 deterministic cases x 3 repeats, writes the JSON report
 make rag-eval      # build the offline index, then gate dense/lexical/hybrid retrieval
-make up            # build/start Postgres, 3 providers, webhook receiver, reconciler
+make cost-report   # deterministic cost report from the eval report
+make terraform-check  # static AWS/Terraform layout checks
+make up            # build/start Postgres, 3 providers, webhook, reconciler, collector, Jaeger
 make service-test  # adapter contracts + webhook/reconciler workflows
 make demo          # eligibility fan-out + one order per provider
 make demo-agent    # scripted agent over MCP stdio, no LLM key needed
@@ -116,10 +124,11 @@ Set `MCP_TOOL_PROFILE=read-only` in `.env` to remove write tools from the server
 The agent starts `python -m aintegrator_mcp_server` itself; `uv run aintegrator-mcp` starts the
 same stdio server for manual inspection.
 
-`make help` lists all targets. The only external dependency is the LLM API; unit tests, the agent
-test suite, the eval suite and the RAG pipeline use scripted clients or a deterministic offline
-embedder and need no key. The local BGE embedder is optional: `uv sync --all-packages --extra local`
-and `RAG_EMBEDDER=local`.
+`make help` lists all targets. The only external runtime dependency is the LLM API; unit tests, the
+agent test suite, the eval suite, the cost report and the RAG pipeline use scripted clients or a
+deterministic offline embedder and need no key. The local BGE embedder is optional:
+`uv sync --all-packages --extra local` and `RAG_EMBEDDER=local`. OTLP export is likewise optional
+(`--extra otlp`); the Terraform CLI is only needed for `make terraform-validate` and real deploys.
 
 Useful local URLs: webhook receiver `http://localhost:8000/docs`, fibernet
 `http://localhost:8001/docs`, legacytel `http://localhost:8002/_control/state`, skylink
@@ -162,6 +171,39 @@ Hybrid recovers 3 queries dense misses. Answers are extractive and carry `[n]` c
 document, section, provider and chunk ID. See [docs/RAG.md](docs/RAG.md) for the corpus format,
 chunking, stores, embedder options and the pgvector service test.
 
+## Observability and cost
+
+`observability` is a leaf package: the agent, integration, MCP server, webhook receiver and
+reconciler depend on its `Tracer` protocol, but it imports no workspace layer. With
+`OTEL_ENABLED=false` (the default) every span is a no-op. To export locally:
+
+```bash
+uv sync --all-packages --extra otlp   # adds the SDK + OTLP exporter
+OTEL_ENABLED=true make up            # collector on :4317, Jaeger UI on http://localhost:16686
+```
+
+Spans cover `agent.run`, `agent.llm`, `agent.tool`,
+`integration.eligibility|create_order|webhook|reconcile|tool|http`. Attributes are primitive,
+bounded and scrubbed of obvious secrets; a fresh run ID correlates agent and integration spans,
+and outbound HTTP carries a W3C `traceparent`. The AWS module exports to X-Ray through the same
+OTLP collector. See ADR 011.
+
+`make eval` writes [evals/reports/latest.json](evals/reports/latest.json) with per-run usage,
+tool profile, provider and pricing metadata (latency is deliberately excluded so the file is byte-
+for-byte deterministic). `make cost-report` turns it into the checked-in
+[docs/cost-report.md](docs/cost-report.md): about **$0.003 per eval run**, with read-only profiles
+cheaper than standard ones. The monthly figure is a labelled planning assumption driven by
+`COST_REPORT_DAILY_RUNS` and `COST_REPORT_DAYS`, never observed spend. See ADR 012.
+
+## Deployment
+
+The fictional AWS demo lives in [infra/terraform](infra/terraform) and is documented in
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): ECS Fargate services registered in Cloud Map, a public
+webhook ALB, ECR repositories, SSM/Secrets Manager ARNs (no inline secrets), an OTLP collector,
+a scheduled reconciler, and an SQS/Lambda-bridged Step Functions workflow that complements the DB
+reconciler (ADRs 004 and 013). All ARNs use the all-zero demo account ID. Static layout checks run
+in `make check`; `make terraform-validate` runs real `fmt`/`init`/`validate` when the CLI is present.
+
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
@@ -170,6 +212,8 @@ chunking, stores, embedder options and the pgvector service test.
 - [Security threat model](docs/SECURITY.md)
 - [Evals](docs/EVALS.md)
 - [RAG](docs/RAG.md)
+- [Deployment](docs/DEPLOYMENT.md)
+- [Cost report](docs/cost-report.md)
 
 ## License
 

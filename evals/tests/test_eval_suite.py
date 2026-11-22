@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from aintegrator_agent.result import AgentResult, ToolTrace
@@ -148,3 +149,24 @@ def test_compute_metrics_handles_empty_suite() -> None:
     metrics = compute_metrics([], [])
     assert metrics.runs == 0
     assert metrics.task_success == 0.0
+
+
+async def test_json_report_is_deterministic_and_cost_ready() -> None:
+    cases = load_cases(_CASES)[:2]
+    first = await run_suite(cases, address=_ADDRESS, customer=_CUSTOMER, repeats=2)
+    second = await run_suite(cases, address=_ADDRESS, customer=_CUSTOMER, repeats=2)
+    first_json = json.dumps(first.as_dict(), indent=2, sort_keys=True)
+    second_json = json.dumps(second.as_dict(), indent=2, sort_keys=True)
+
+    assert first_json == second_json
+    payload = json.loads(first_json)
+    assert "latency_p50_ms" not in payload["metrics"]
+    assert payload["config"]["model"]
+    assert len(payload["runs"]) == 4
+    assert all(
+        {"profile", "provider", "usage", "case_id", "repeat"} <= set(run) for run in payload["runs"]
+    )
+    assert all(
+        {"input_tokens", "output_tokens", "cost_usd"} <= set(run["usage"])
+        for run in payload["runs"]
+    )

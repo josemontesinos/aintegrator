@@ -11,6 +11,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 import httpx
+from aintegrator_observability import Tracer, get_tracer, trace_headers, traced
 
 from aintegrator_integration.config import Settings
 from aintegrator_integration.domain import ProviderRateLimited, ProviderTimeout, ProviderUnavailable
@@ -40,8 +41,10 @@ class ResilientHttpClient:
         get_token: TokenGetter | None = None,
         refresh_token: TokenGetter | None = None,
         audit_sink: AuditSink | None = None,
+        tracer: Tracer | None = None,
     ) -> None:
         self.provider = provider
+        self.tracer: Tracer = tracer or get_tracer()
         self.settings = settings
         self.clock: Clock = clock or SystemClock()
         self._client = client or httpx.AsyncClient()
@@ -66,6 +69,16 @@ class ResilientHttpClient:
         if self._owns_client:
             await self._client.aclose()
 
+    @traced(
+        "integration.http",
+        attributes=lambda self, method, url, **kwargs: {
+            "provider": self.provider,
+            "operation": kwargs.get("operation", "http"),
+            "method": method,
+            "route": url.split("?", 1)[0],
+            "idempotent": bool(kwargs.get("idempotent", False)),
+        },
+    )
     async def request(
         self,
         method: str,
@@ -92,6 +105,8 @@ class ResilientHttpClient:
         async def attempt() -> httpx.Response:
             nonlocal refreshed
             request_headers = dict(headers or {})
+            for key, value in trace_headers().items():
+                request_headers.setdefault(key, value)
             if self._get_token is not None:
                 token = await self._get_token()
                 if token:

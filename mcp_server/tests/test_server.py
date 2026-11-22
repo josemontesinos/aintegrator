@@ -151,8 +151,8 @@ async def test_amain_owns_the_service_lifecycle(monkeypatch: pytest.MonkeyPatch)
         async def run_stdio_async(self) -> None:
             events.append("run")
 
-    monkeypatch.setattr(server_module, "build_mcp_service", StubService)
-    monkeypatch.setattr(server_module, "create_server", lambda service: StubServer())
+    monkeypatch.setattr(server_module, "build_mcp_service", lambda **_kwargs: StubService())
+    monkeypatch.setattr(server_module, "create_server", lambda service, **_kwargs: StubServer())
 
     await server_module.amain()
 

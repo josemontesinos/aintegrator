@@ -32,6 +32,20 @@ jobs:
       - run: uv python install 3.12
       - run: uv sync --all-packages --frozen
       - run: make eval
+      - name: Verify the checked-in eval report has no drift
+        run: git diff --exit-code -- evals/reports/latest.json
+
+  cost:
+    name: deterministic cost report
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv python install 3.12
+      - run: uv sync --all-packages --frozen
+      - run: make cost-report-check
 
   rag:
     name: deterministic retrieval eval
@@ -72,6 +86,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: make compose-check
+
+  terraform:
+    name: terraform fmt and validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+          terraform_wrapper: false
+      - run: terraform fmt -check -recursive infra/terraform
+      - run: terraform -chdir=infra/terraform init -backend=false -input=false
+      - run: terraform -chdir=infra/terraform validate
 
   secrets:
     name: gitleaks

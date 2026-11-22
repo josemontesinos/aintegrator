@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
+from contextlib import contextmanager
+from typing import Any
 
 import pytest
 from aintegrator_agent.llm import LLMReply, Message, ScriptedLLM, ToolCall, ToolDefinition
@@ -83,3 +86,57 @@ async def test_history_is_kept_for_follow_up_turns() -> None:
         "and again",
     ]
     assert isinstance(second.messages[0], Message)
+
+
+class _RecordingSpan:
+    def __init__(self) -> None:
+        self.attributes: dict[str, object] = {}
+        self.status: str | None = None
+        self.exceptions: list[BaseException] = []
+
+    def set_attribute(self, key: str, value: object) -> None:
+        self.attributes[key] = value
+
+    def record_exception(self, exception: BaseException) -> None:
+        self.exceptions.append(exception)
+
+    def set_status(self, status: str, description: str | None = None) -> None:
+        self.status = status
+
+
+class _RecordingTracer:
+    def __init__(self) -> None:
+        self.names: list[str] = []
+        self.spans: list[_RecordingSpan] = []
+
+    @contextmanager
+    def start_span(self, name: str, attributes: Any = None) -> Iterator[_RecordingSpan]:
+        span = _RecordingSpan()
+        span.attributes.update(attributes or {})
+        self.names.append(name)
+        self.spans.append(span)
+        yield span
+
+
+async def test_loop_emits_redacted_agent_spans() -> None:
+    tracer = _RecordingTracer()
+    llm = ScriptedLLM(
+        [
+            LLMReply(tool_calls=(_TOOL_CALL,), input_tokens=10, output_tokens=5),
+            LLMReply(text="Done.", output_tokens=3),
+        ]
+    )
+    result = await AgentLoop(llm, EchoTools(), tracer=tracer).run("check coverage")
+
+    assert result.answer == "Done."
+    assert tracer.names == ["agent.run", "agent.llm", "agent.tool", "agent.llm"]
+    run_span = tracer.spans[0]
+    assert run_span.attributes["steps"] == 2
+    assert run_span.attributes["tool_calls"] == 1
+    assert run_span.attributes["input_tokens"] == 10
+    assert run_span.attributes["output_tokens"] == 8
+    assert run_span.status == "ok"
+    assert isinstance(run_span.attributes["run_id"], str)
+    assert tracer.spans[2].attributes["tool"] == "check_eligibility"
+    assert tracer.spans[2].attributes["run_id"] == run_span.attributes["run_id"]
+    assert tracer.spans[2].status == "ok"

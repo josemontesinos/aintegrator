@@ -1,8 +1,8 @@
 # Architecture
 
-Phase 6 implements the provider-facing boundaries, the hand-written agent, the MCP boundary, hard
-security controls, deterministic evals and RAG. The final phase adds AWS/Terraform, tracing and a
-cost report.
+All seven phases are implemented: provider-facing boundaries, the hand-written agent, the MCP
+boundary, hard security controls, deterministic evals, RAG, and finally AWS/Terraform, tracing and
+a deterministic cost report.
 
 ```mermaid
 flowchart TD
@@ -21,6 +21,10 @@ flowchart TD
     reconciler --> pg
     rag[RAG package + CLI] -->|pgvector / offline index| pg
     rag --> docs[Corpus: fictional provider docs]
+    agent -.->|run IDs, redacted spans| obs[observability leaf]
+    service -.->|redacted spans| obs
+    obs -.->|OTLP when enabled| collector[OTLP collector]
+    collector --> jaeger[Jaeger UI / AWS X-Ray]
 ```
 
 ## Dependency rules (enforced by import-linter)
@@ -33,6 +37,11 @@ flowchart TD
 - `evals` imports the agent and integration layers, never the server or providers.
 - `rag` is a leaf package: it imports no other workspace layer (enforced by import-linter), so
   retrieval can later be exposed by any layer without creating a dependency cycle.
+- `observability` is another leaf: agent, integration, MCP server, webhook and reconciler may import
+  it, but it imports no workspace layer. Provider packages cannot import it either, keeping the
+  adapter boundary unchanged.
+- `evals` imports the agent and integration layers to produce the cost-report input; the cost
+  renderer itself lives in the leaf `observability` package and imports no eval code.
 
 ## Repository layout
 
@@ -40,8 +49,9 @@ Every top-level package is a uv workspace member with its own `pyproject.toml` a
 
 ```
 providers/{provider_common,fibernet,legacytel,skylink}/
-integration/  mcp_server/  agent/  evals/  rag/
-infra/terraform/  docs/  docker-compose.yml  Makefile  .github/workflows/
+integration/  mcp_server/  agent/  evals/  rag/  observability/
+infra/terraform/  infra/otel/  infra/tests/  docs/  docker-compose.yml
+Makefile  .github/workflows/
 ```
 
 ## Provider adapters
@@ -222,14 +232,76 @@ flowchart LR
 Retrieved text is untrusted data: the answer path quotes snippets and renders a source list, and
 the RAG package exposes no write tool. See [RAG.md](RAG.md) and ADR 010.
 
+## Tracing (phase 7)
+
+`observability` exposes a four-method `Tracer` protocol (`start_span`) and a matching `Span`
+(`set_attribute`, `record_exception`, `set_status`). `NoopTracer` is the default, so a bare checkout
+never opens a socket. `configure_tracing()` reads `OTEL_ENABLED` and, when the optional `otlp` extra
+is installed, wires an OTLP gRPC exporter to `OTEL_EXPORTER_OTLP_ENDPOINT`. `OtelTracer` is the only
+place that imports the SDK; callers pass plain dictionaries.
+
+```mermaid
+flowchart LR
+    CLI[CLI / MCP / webhook / reconciler] --> Configure[configure_tracing]
+    Configure --> Tracer[Tracer protocol]
+    Loop[AgentLoop] --> Tracer
+    Service[ConnectivityService] --> Tracer
+    Ops[ToolOperations] --> Tracer
+    Http[ResilientHttpClient / SOAP] --> Tracer
+    Tracer --> Safe[safe_attributes: primitive, bounded, redacted]
+    Safe --> Sink[Noop by default / OTLP -> collector -> Jaeger or X-Ray]
+```
+
+`AgentLoop.run` creates a UUID run ID in a `ContextVar`, resets it in `finally`, and decorates every
+nested span with it. The `traced` decorator adds the same run ID to service and HTTP spans and marks
+failures with `record_exception` + an error status. `trace_headers()` emits a W3C `traceparent` on
+outbound HTTP when an OTLP span is live. Attribute names containing password/secret/token/key
+fragments are dropped and long strings are truncated; tool arguments and results are never span
+attributes. See ADR 011.
+
+## Cost report (phase 7)
+
+The eval runner adds per-run `profile`, `provider`, `tags` and token/cost `usage` plus a top-level
+`config` block to `evals/reports/latest.json`. Machine-dependent latency is omitted from that file
+so repeated runs are byte-identical. `aintegrator-cost-report` aggregates the runs into profile and
+provider buckets, reports cost per run and a separate planning projection from
+`COST_REPORT_DAILY_RUNS × COST_REPORT_DAYS`, and renders `docs/cost-report.md` with no timestamps or
+host paths. `make cost-report-check` is a CI gate. No billing API, API key or running service is
+involved; all rates are fictional. See ADR 012.
+
+## AWS deployment (phase 7)
+
+The Terraform module under `infra/terraform` mirrors the local stack: ECR repositories, an ECS
+Fargate cluster with Cloud Map service discovery, a public ALB for the webhook, an EventBridge
+scheduled reconciler, and a private namespace for provider endpoints. Credentials are passed as
+SSM/Secrets Manager ARNs through `TF_VAR_*` and injected as ECS secrets; no literal secret appears
+in HCL or tfvars. An ADOT collector receives OTLP on `4317`/`4318` and exports to X-Ray plus debug
+logs. Step Functions runs the reconciler, waits on an SQS task token and falls back to another
+reconciler task; a dependency-free Lambda bridge completes the token. The DB reconciler remains
+authoritative (ADR 004). Public subnets, public IPs and HTTP are demo-only choices (ADR 013).
+
+```mermaid
+flowchart LR
+    GitHub[CI] --> Validate[fmt + init -backend=false + validate]
+    TF[Terraform module] --> ECR[ECR + ECS Fargate]
+    TF --> SM[Cloud Map + ALB]
+    TF --> SFN[Step Functions + SQS + Lambda bridge]
+    TF --> Collector[ADOT collector -> X-Ray]
+    ECR --> Secrets[SSM / Secrets Manager ARNs]
+```
+
 ## Testing layers
 
 - **Unit** (`make check`): no services, in-memory SQLite, fake gateways. Covers domain rules,
   mappers, resilience primitives, service idempotency, state-machine behavior, tool schemas, the
-  agent loop, CLI wiring, eval harness (bindings, graders, baseline drift) and RAG corpus,
-  embedders, stores, rank fusion and graders.
+  agent loop, CLI wiring, eval harness (bindings, graders, baseline drift), RAG corpus,
+  embedders, stores, rank fusion, tracing spans, cost aggregation and static Terraform layout.
 - **Eval** (`make eval`): 34 YAML cases × 3 repeats over the real loop and tool boundary with
-  cassettes and simulated providers; gates stable metrics against a checked-in baseline.
+  cassettes and simulated providers; gates stable metrics and writes the deterministic JSON report.
+- **Cost** (`make cost-report-check`): verifies the checked-in Markdown is reproducible from that
+  report, with no API key or live cost API.
+- **Terraform** (`make terraform-check` / `make terraform-validate`): static HCL/layout assertions
+  locally; real `fmt`, `init -backend=false` and `validate` in CI.
 - **Retrieval eval** (`make rag-eval`): rebuilds the offline index, then runs 14 queries × 3 modes;
   gates recall@5, MRR and nDCG@5 against `rag/retrieval_baseline.json`.
 - **MCP protocol** (`mcp_server/tests`): in-memory client/server sessions cover tool discovery,
@@ -244,4 +316,4 @@ the RAG package exposes no write tool. See [RAG.md](RAG.md) and ADR 010.
 
 ## Decisions
 
-Decisions 001–010 are recorded in [docs/decisions](decisions/).
+Decisions 001–013 are recorded in [docs/decisions](decisions/).

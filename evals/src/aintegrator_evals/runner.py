@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from aintegrator_agent.config import get_agent_settings
 from aintegrator_integration.security import WRITE_TOOLS
 
 from aintegrator_evals.harness import run_repeat
@@ -39,18 +40,46 @@ STABLE_METRICS = (
 )
 
 
+def _provider_for(result: CaseResult) -> str:
+    """Best-effort provider label for cost grouping; no PII is exposed."""
+    if result.agent is not None:
+        for trace in result.agent.tool_traces:
+            provider = trace.arguments.get("provider")
+            if isinstance(provider, str) and provider:
+                return provider
+    for order in result.state.get("orders", []):
+        provider = order.get("provider")
+        if isinstance(provider, str) and provider:
+            return provider
+    tools = {trace.name for trace in result.agent.tool_traces} if result.agent else set()
+    return "all" if "check_eligibility" in tools else "none"
+
+
 @dataclass(frozen=True, slots=True)
 class EvalReport:
     """Aggregate metrics, all per-run evidence and the baseline verdict."""
 
     metrics: Metrics
     results: tuple[CaseResult, ...]
+    cases: tuple[Case, ...] = ()
     baseline_ok: bool | None = None
     baseline_detail: dict[str, str] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, Any]:
+        settings = get_agent_settings()
+        cases = {case.id: case for case in self.cases}
+        # Latency is machine-dependent; it stays in the CLI summary but not in the
+        # checked-in report, which is also the input to the deterministic cost report.
+        metrics = self.metrics.as_dict()
+        metrics.pop("latency_p50_ms", None)
+        metrics.pop("latency_p95_ms", None)
         return {
-            "metrics": self.metrics.as_dict(),
+            "config": {
+                "model": settings.llm_model,
+                "cost_input_per_million": settings.cost_input_per_million,
+                "cost_output_per_million": settings.cost_output_per_million,
+            },
+            "metrics": metrics,
             "baseline_ok": self.baseline_ok,
             "baseline_detail": self.baseline_detail,
             "runs": [
@@ -58,6 +87,18 @@ class EvalReport:
                     "case_id": result.case_id,
                     "repeat": result.repeat,
                     "passed": result.passed,
+                    "profile": cases[result.case_id].setup.profile
+                    if result.case_id in cases
+                    else "unknown",
+                    "provider": _provider_for(result),
+                    "tags": list(cases[result.case_id].tags) if result.case_id in cases else [],
+                    "usage": {
+                        "input_tokens": result.agent.usage.input_tokens,
+                        "output_tokens": result.agent.usage.output_tokens,
+                        "cost_usd": result.agent.usage.cost_usd,
+                    }
+                    if result.agent
+                    else {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0},
                     "checks": result.checks,
                     "checks_detail": result.checks_detail,
                     "tools": [trace.name for trace in result.agent.tool_traces]
@@ -163,7 +204,11 @@ async def run_suite(
                     judge=judge,
                 )
             )
-    return EvalReport(metrics=compute_metrics(results, cases), results=tuple(results))
+    return EvalReport(
+        metrics=compute_metrics(results, cases),
+        results=tuple(results),
+        cases=tuple(cases),
+    )
 
 
 def load_baseline(path: str | Path) -> dict[str, float]:

@@ -14,6 +14,7 @@ from aintegrator_integration.factory import build_mcp_service
 from aintegrator_integration.security import ToolSecurity, build_tool_security
 from aintegrator_integration.service import ConnectivityService
 from aintegrator_integration.tooling import TOOL_DESCRIPTIONS, ToolOperations
+from aintegrator_observability import Tracer, configure_tracing, get_tracer
 from mcp.server.fastmcp import FastMCP
 
 __all__ = ["create_server", "main"]
@@ -24,8 +25,10 @@ def create_server(
     *,
     run_id: str | None = None,
     security: ToolSecurity | None = None,
+    tracer: Tracer | None = None,
 ) -> FastMCP:
     """Build a server around an injected service (used by tests and ``main``)."""
+    active_tracer = tracer or get_tracer()
     policy = security or build_tool_security(service.session_maker, service.settings)
     mcp = FastMCP(
         "aintegrator",
@@ -35,7 +38,7 @@ def create_server(
             "returns an approval ID, and a human must grant it before a retry can succeed."
         ),
     )
-    operations = ToolOperations(service, run_id=run_id, security=policy)
+    operations = ToolOperations(service, run_id=run_id, security=policy, tracer=active_tracer)
 
     @mcp.tool(name="check_eligibility", description=TOOL_DESCRIPTIONS["check_eligibility"])
     async def check_eligibility(
@@ -110,9 +113,10 @@ def create_server(
 
 async def amain() -> None:
     """Async stdio entry point: own the service within the server's event loop."""
-    service = build_mcp_service()
+    tracer = configure_tracing(service_name="aintegrator-mcp")
+    service = build_mcp_service(tracer=tracer)
     try:
-        await create_server(service).run_stdio_async()
+        await create_server(service, tracer=tracer).run_stdio_async()
     finally:
         await service.aclose()
 

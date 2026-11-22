@@ -1,0 +1,18 @@
+# Fictional demo values only. No credentials belong in this file.
+aws_region                 = "us-east-1"
+name_prefix                = "aintegrator-demo"
+image_tag                  = "demo"
+vpc_cidr                   = "10.42.0.0/16"
+public_subnet_cidrs        = ["10.42.1.0/24", "10.42.2.0/24"]
+availability_zones         = ["us-east-1a", "us-east-1b"]
+alb_ingress_cidrs          = ["203.0.113.0/24"]
+reconcile_schedule         = "rate(5 minutes)"
+step_function_wait_seconds = 300
+log_retention_days         = 14
+
+# Secrets are supplied outside this file, for example:
+#   export TF_VAR_llm_api_key_secret_arn="arn:aws:secretsmanager:us-east-1:000000000000:secret:aintegrator/llm-placeholder"
+#   export TF_VAR_database_url_secret_arn="arn:aws:secretsmanager:us-east-1:000000000000:secret:aintegrator/db-placeholder"
+#   export TF_VAR_provider_secret_arns='{"FIBERNET_CLIENT_ID":"arn:aws:ssm:us-east-1:000000000000:parameter/aintegrator/fibernet-id","FIBERNET_CLIENT_SECRET":"arn:aws:ssm:us-east-1:000000000000:parameter/aintegrator/fibernet-secret"}'
+# The ARNs above are placeholders with an all-zero account ID; create real SSM/Secrets Manager
+# parameters in your own demo account and pass their ARNs via TF_VAR_* (or a protected tfvars).

@@ -1,0 +1,103 @@
+{
+  "Comment": "Fictional order lifecycle. ADR 004: complements the authoritative DB reconciler; both ECS tasks run the same reconciler code.",
+  "StartAt": "RunProviderCheck",
+  "States": {
+    "RunProviderCheck": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::ecs:runTask.sync",
+      "Parameters": {
+        "Cluster": "${cluster_arn}",
+        "TaskDefinition": "${check_task_definition_arn}",
+        "LaunchType": "FARGATE",
+        "NetworkConfiguration": {
+          "AwsvpcConfiguration": {
+            "Subnets": ${subnet_ids},
+            "SecurityGroups": ${security_group_ids},
+            "AssignPublicIp": "ENABLED"
+          }
+        },
+        "Overrides": {
+          "ContainerOverrides": [
+            {
+              "Name": "reconciler",
+              "Environment": [
+                { "Name": "ORDER_ID", "Value.$": "$.order_id" }
+              ]
+            }
+          ]
+        }
+      },
+      "TimeoutSeconds": ${task_timeout_seconds},
+      "ResultPath": "$.check",
+      "Next": "WaitForProvider",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.check_error",
+          "Next": "ExecutionFailed"
+        }
+      ]
+    },
+    "WaitForProvider": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sqs:sendMessage.waitForTaskToken",
+      "Parameters": {
+        "QueueUrl": "${queue_url}",
+        "MessageBody": {
+          "TaskToken.$": "$$.Task.Token",
+          "order_id.$": "$.order_id",
+          "status": "awaiting_provider"
+        }
+      },
+      "TimeoutSeconds": ${step_wait_seconds},
+      "ResultPath": "$.wait_result",
+      "Next": "ProviderAccepted",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.Timeout", "States.TaskFailed"],
+          "ResultPath": "$.wait_error",
+          "Next": "ReconcileFallback"
+        }
+      ]
+    },
+    "ProviderAccepted": {
+      "Type": "Succeed",
+      "Comment": "The fictional bridge reported a terminal success status."
+    },
+    "ReconcileFallback": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::ecs:runTask.sync",
+      "Parameters": {
+        "Cluster": "${cluster_arn}",
+        "TaskDefinition": "${fallback_task_definition_arn}",
+        "LaunchType": "FARGATE",
+        "NetworkConfiguration": {
+          "AwsvpcConfiguration": {
+            "Subnets": ${subnet_ids},
+            "SecurityGroups": ${security_group_ids},
+            "AssignPublicIp": "ENABLED"
+          }
+        }
+      },
+      "TimeoutSeconds": ${task_timeout_seconds},
+      "ResultPath": "$.fallback",
+      "Next": "OrderReconciled",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.fallback_error",
+          "Next": "ExecutionFailed"
+        }
+      ]
+    },
+    "OrderReconciled": {
+      "Type": "Succeed",
+      "Comment": "Fallback reconciler converged the order; the DB reconciler stays authoritative (ADR 004)."
+    },
+    "ExecutionFailed": {
+      "Type": "Fail",
+      "Error": "FictionalOrderWorkflowFailed",
+      "Cause": "The demo ECS task failed; the DB reconciler remains authoritative."
+    }
+  }
+}

@@ -11,6 +11,8 @@ import argparse
 import asyncio
 from datetime import UTC, datetime
 
+from aintegrator_observability import configure_tracing
+
 from aintegrator_integration.config import Settings
 from aintegrator_integration.factory import get_service
 from aintegrator_integration.persistence import Repository, session_scope
@@ -57,6 +59,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--once", action="store_true", help="run a single pass and exit")
     parser.add_argument("--interval", type=float, default=10.0, help="loop interval in seconds")
     args = parser.parse_args(argv)
+    configure_tracing(service_name="aintegrator-reconciler")
     service = get_service()
     if args.once:
         changes = asyncio.run(reconcile_once(service))

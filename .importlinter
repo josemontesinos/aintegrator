@@ -11,6 +11,7 @@ root_packages =
     aintegrator_skylink
     aintegrator_evals
     aintegrator_rag
+    aintegrator_observability
 
 [importlinter:Agent never imports the MCP server]
 name = Agent talks to the MCP server over the MCP protocol only
@@ -46,6 +47,7 @@ forbidden_modules =
     aintegrator_skylink
     aintegrator_evals
     aintegrator_rag
+    aintegrator_observability
 
 [importlinter:Legacytel depends only on common]
 name = Legacytel imports no other layer
@@ -60,6 +62,7 @@ forbidden_modules =
     aintegrator_skylink
     aintegrator_evals
     aintegrator_rag
+    aintegrator_observability
 
 [importlinter:Skylink depends only on common]
 name = Skylink imports no other layer
@@ -74,6 +77,7 @@ forbidden_modules =
     aintegrator_legacytel
     aintegrator_evals
     aintegrator_rag
+    aintegrator_observability
 
 [importlinter:RAG is independent]
 name = RAG imports no upper layers, providers or evals
@@ -89,6 +93,23 @@ forbidden_modules =
     aintegrator_fibernet
     aintegrator_legacytel
     aintegrator_skylink
+    aintegrator_observability
+
+[importlinter:Observability is a leaf]
+name = Observability imports no workspace layer
+type = forbidden
+source_modules =
+    aintegrator_observability
+forbidden_modules =
+    aintegrator_agent
+    aintegrator_integration
+    aintegrator_mcp_server
+    aintegrator_provider_common
+    aintegrator_fibernet
+    aintegrator_legacytel
+    aintegrator_skylink
+    aintegrator_evals
+    aintegrator_rag
 
 [importlinter:MCP server does not import the agent]
 name = MCP server imports integration, not the agent or providers

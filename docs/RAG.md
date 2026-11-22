@@ -1,6 +1,6 @@
 # RAG over fictional provider documentation
 
-**Current status (phase 6, `v0.6-rag`).** The `aintegrator-rag` workspace package ingests four
+**Introduced in phase 6; current release `v1.0`.** The `aintegrator-rag` workspace package ingests four
 fictional provider documents, embeds deterministic chunks, retrieves with dense, lexical or hybrid
 search behind one interface, and produces extractive answers with citations. The default offline
 path needs no model download, API key or Docker stack; the local `bge-small-en-v1.5` model is an

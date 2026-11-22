@@ -8,6 +8,7 @@ from typing import Any, cast
 from uuid import UUID, uuid4
 
 import requests
+from aintegrator_observability import Tracer, get_tracer, traced
 from zeep import Client
 from zeep.exceptions import Fault
 from zeep.helpers import serialize_object
@@ -66,12 +67,14 @@ class LegacytelAdapter:
         clock: Clock | None = None,
         soap_call: Any = None,
         audit_sink: AuditSink | None = None,
+        tracer: Tracer | None = None,
     ) -> None:
         self.settings = settings
         self.clock: Clock = clock or SystemClock()
         self._soap_call = soap_call
         self._client: Client | None = None
         self._audit_sink = audit_sink
+        self.tracer: Tracer = tracer or get_tracer()
 
     def _build_client(self) -> Client:
         session = requests.Session()
@@ -92,6 +95,15 @@ class LegacytelAdapter:
         client.service._binding_options = binding_options
         return client
 
+    @traced(
+        "integration.http",
+        attributes=lambda self, operation, payload, **kwargs: {
+            "provider": self.name,
+            "operation": operation,
+            "protocol": "soap",
+            "idempotent": bool(kwargs.get("idempotent", False)),
+        },
+    )
     async def _call(
         self, operation: str, payload: dict[str, object], *, idempotent: bool = False
     ) -> Any:

@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from functools import lru_cache
 
+from aintegrator_observability import Tracer, current_run_id, get_tracer
+
 from aintegrator_integration.adapters import FibernetAdapter, LegacytelAdapter, SkylinkAdapter
 from aintegrator_integration.config import Settings, get_settings
 from aintegrator_integration.gateways import ProviderGateway
@@ -39,7 +41,7 @@ def make_audit_sink(session_maker: SessionMaker) -> AuditSink:
                 url,
                 latency_ms,
                 outcome,
-                run_id,
+                run_id or current_run_id(),
                 datetime.now(UTC),
             )
 
@@ -51,13 +53,21 @@ def build_gateways(
     *,
     clock: Clock | None = None,
     session_maker: SessionMaker | None = None,
+    tracer: Tracer | None = None,
 ) -> dict[str, ProviderGateway]:
+    active_tracer = tracer or get_tracer()
     audit_sink = make_audit_sink(session_maker) if session_maker is not None else None
-    fibernet_http = ResilientHttpClient("fibernet", settings, clock=clock, audit_sink=audit_sink)
-    skylink_http = ResilientHttpClient("skylink", settings, clock=clock, audit_sink=audit_sink)
+    fibernet_http = ResilientHttpClient(
+        "fibernet", settings, clock=clock, audit_sink=audit_sink, tracer=active_tracer
+    )
+    skylink_http = ResilientHttpClient(
+        "skylink", settings, clock=clock, audit_sink=audit_sink, tracer=active_tracer
+    )
     return {
         "fibernet": FibernetAdapter(settings, clock=clock, http=fibernet_http),
-        "legacytel": LegacytelAdapter(settings, clock=clock, audit_sink=audit_sink),
+        "legacytel": LegacytelAdapter(
+            settings, clock=clock, audit_sink=audit_sink, tracer=active_tracer
+        ),
         "skylink": SkylinkAdapter(settings, clock=clock, http=skylink_http),
     }
 
@@ -68,26 +78,36 @@ def build_service(
     clock: Clock | None = None,
     gateways: dict[str, ProviderGateway] | None = None,
     database_url: str | None = None,
+    tracer: Tracer | None = None,
 ) -> ConnectivityService:
     config = settings or get_settings()
+    active_tracer = tracer or get_tracer()
     engine = make_engine(database_url or config.database_url)
     session_maker = make_session_maker(engine)
     return ConnectivityService(
-        gateways or build_gateways(config, clock=clock, session_maker=session_maker),
+        gateways
+        or build_gateways(config, clock=clock, session_maker=session_maker, tracer=active_tracer),
         session_maker,
         settings=config,
         clock=clock,
         engine=engine,
+        tracer=active_tracer,
     )
 
 
 def build_mcp_service(
-    settings: Settings | None = None, *, clock: Clock | None = None
+    settings: Settings | None = None,
+    *,
+    clock: Clock | None = None,
+    tracer: Tracer | None = None,
 ) -> ConnectivityService:
     """Build the MCP server's service using its least-privilege DB role."""
     config = settings or get_settings()
     return build_service(
-        config, clock=clock, database_url=config.mcp_database_url or config.database_url
+        config,
+        clock=clock,
+        database_url=config.mcp_database_url or config.database_url,
+        tracer=tracer,
     )
 
 

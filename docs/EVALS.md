@@ -1,6 +1,6 @@
 # Evals
 
-**Current status (phase 5, `v0.5-evals`).** The suite has 34 YAML cases run three times each
+**Introduced in phase 5; current release `v1.0`.** The suite has 34 YAML cases run three times each
 (102 runs) entirely offline: deterministic provider replicas, checked-in LLM cassettes and an
 in-memory database per repeat. State-based graders are the primary signal; trajectory checks,
 approval-compliance checks and an optional pinned LLM judge for answer rubrics supplement them.
@@ -12,15 +12,16 @@ approval-compliance checks and an optional pinned LLM judge for answer rubrics s
 evals/cases.yaml      # 34 cases + shared address/customer fragments + cassettes
 evals/baseline.json   # stable metric baseline; latency excluded from gating
 evals/src/...          # models, cassette loader, provider replicas, harness, graders, runner
-evals/reports/         # optional --json output (gitkeep only)
+evals/reports/latest.json # deterministic checked-in cost-report input (no latency)
 ```
 
 Run it with:
 
 ```bash
-make eval              # compares against evals/baseline.json, exit 1 on drift
+make eval              # compares against baseline, writes evals/reports/latest.json
+make eval-report       # rewrite only the JSON report
 make eval-baseline     # regenerate after an intentional case/prompt change
-python -m aintegrator_evals --json evals/reports/latest.json
+make cost-report       # render docs/cost-report.md from the JSON report
 python -m aintegrator_evals --judge llm   # optional rubric judge (EVAL_LLM_API_KEY)
 ```
 
@@ -115,6 +116,16 @@ fragments; every other path resolves against the last tool-result JSON (for exam
 Random order/approval UUIDs are normalised out of the determinism fingerprint; statuses, tool
 trajectories, counts and error codes must match exactly. Latency is machine-dependent and is
 deliberately not a CI gate.
+
+## JSON report and cost input
+
+`make eval` writes `evals/reports/latest.json`. Besides the metrics, each of the 102 runs carries
+its case ID, repeat index, tool `profile`, best-effort `provider`, tags, tool list and token/cost
+`usage`; the top-level `config` records the model and fictional prices. Latency is intentionally
+absent from this file even though the CLI summary still prints it, so two offline runs produce
+identical bytes. `aintegrator-cost-report` groups these runs by profile and provider and renders
+[docs/cost-report.md](cost-report.md). The monthly number is a planning assumption from
+`COST_REPORT_DAILY_RUNS` and `COST_REPORT_DAYS`, not observed spend; see ADR 012.
 
 ## Why no live LLM in CI
 
