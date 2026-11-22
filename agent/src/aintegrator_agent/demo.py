@@ -1,7 +1,7 @@
-"""Deterministic end-to-end agent demo: no API key, real providers.
+"""Deterministic end-to-end agent demo: no API key, real MCP server and tools.
 
-The scripted LLM asks for eligibility once, then formats the tool result into a
-human-readable answer. This exercises the same loop, tools and service as the
+The scripted LLM asks for eligibility once, then formats the MCP tool result
+into a human-readable answer. This exercises the same loop and transport as the
 real CLI without depending on a model.
 """
 
@@ -11,14 +11,12 @@ import asyncio
 import json
 from collections.abc import Sequence
 
-from aintegrator_integration.factory import build_service
 from aintegrator_integration.service import ConnectivityService
 
+from aintegrator_agent.agent import build_agent
 from aintegrator_agent.config import get_agent_settings
 from aintegrator_agent.llm import LLMReply, Message, ScriptedLLM, ToolCall
-from aintegrator_agent.loop import AgentLoop
 from aintegrator_agent.result import AgentResult
-from aintegrator_agent.tools import InProcessTools
 
 __all__ = ["main", "run_demo"]
 
@@ -43,10 +41,8 @@ def _format_tool_result(messages: Sequence[Message]) -> LLMReply:
     return LLMReply(text="\n".join(lines))
 
 
-async def run_demo(service: ConnectivityService | None = None) -> AgentResult:
-    """Run the scripted loop; close externally supplied services yourself."""
-    runtime = service or build_service()
-    llm = ScriptedLLM(
+def _scripted_llm() -> ScriptedLLM:
+    return ScriptedLLM(
         [
             LLMReply(
                 text="I will check all three providers.",
@@ -67,13 +63,14 @@ async def run_demo(service: ConnectivityService | None = None) -> AgentResult:
             _format_tool_result,
         ]
     )
-    settings = get_agent_settings()
-    loop = AgentLoop(llm, InProcessTools(runtime), max_steps=settings.agent_max_steps)
-    try:
+
+
+async def run_demo(service: ConnectivityService | None = None) -> AgentResult:
+    """Run the scripted loop; close an externally supplied service yourself."""
+    async with build_agent(
+        get_agent_settings(), service=service, llm_client=_scripted_llm()
+    ) as loop:
         return await loop.run(TASK)
-    finally:
-        if service is None:
-            await runtime.aclose()
 
 
 def main() -> int:

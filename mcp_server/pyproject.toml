@@ -5,9 +5,12 @@ description = "FastMCP server exposing the integration layer as tools"
 requires-python = ">=3.12"
 dependencies = [
     "aintegrator-integration",
-    "mcp>=1.0",
+    "mcp>=1.0,<2",
     "pydantic>=2.9",
 ]
+
+[project.scripts]
+aintegrator-mcp = "aintegrator_mcp_server.server:main"
 
 [build-system]
 requires = ["hatchling>=1.25"]

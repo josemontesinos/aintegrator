@@ -19,8 +19,8 @@ format: ## Format all Python files
 format-check: ## Verify formatting
 	$(UV) run ruff format --check .
 
-typecheck: ## mypy strict for integration and agent
-	$(UV) run mypy -p aintegrator_integration -p aintegrator_agent
+typecheck: ## mypy (strict for integration and agent) for all runtime packages
+	$(UV) run mypy -p aintegrator_integration -p aintegrator_agent -p aintegrator_mcp_server
 
 importcheck: ## Enforce the one-way dependency rules
 	$(UV) run lint-imports

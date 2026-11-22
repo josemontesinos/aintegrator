@@ -10,14 +10,14 @@ All domain data is fictional. No real providers, telecom specifications or emplo
 ## Status
 
 This repository is built phase by phase; each phase ends with a green CI, an updated README and a
-git tag. **Current phase: 2 — hand-written agent + CLI (`v0.2-agent`).**
+git tag. **Current phase: 3 — MCP server + MCP client (`v0.3-mcp`).**
 
 | Phase | Deliverable | Tag | Status |
 | --- | --- | --- | --- |
 | 0 | uv workspace, CI, Compose + Postgres, ADR template | `v0.0-scaffold` | done |
 | 1 | Providers + integration layer | `v0.1-integration` | done |
 | 2 | Hand-written agent + CLI | `v0.2-agent` | done |
-| 3 | MCP server + MCP client | `v0.3-mcp` | planned |
+| 3 | MCP server + MCP client | `v0.3-mcp` | done |
 | 4 | Security controls | `v0.4-security` | planned |
 | 5 | Evals (30+ cases, cassettes) | `v0.5-evals` | planned |
 | 6 | RAG over provider docs | `v0.6-rag` | planned |
@@ -54,7 +54,12 @@ typed in-process tools (eligibility, order create/read/list/cancel) against `Con
 records a trace of every call, and tracks token usage and estimated cost. The LLM boundary is an
 interface: tests use a deterministic scripted client, so `make check` needs no API key. The system
 prompt asks the model to confirm writes first; the hard server-side approval gate arrives in
-phase 4. Phase 3 replaces the in-process executor with an MCP client behind the same interface.
+phase 4.
+
+Phase 3 moves those tools behind a real MCP boundary. The FastMCP server calls `integration`
+in-process (ADR 003) and is launched by the agent over stdio; the agent discovers tools through
+`list_tools` and calls them through `call_tool`, with no import from the server package. Tool
+payload logic is shared in `integration.tooling`, and the MCP SDK is pinned to the 1.x line (ADR 006).
 
 ## Quickstart
 
@@ -67,7 +72,7 @@ make check         # lint, format, strict typing, import rules, unit tests
 make up            # build/start Postgres, 3 providers, webhook receiver, reconciler
 make service-test  # adapter contracts + webhook/reconciler workflows
 make demo          # eligibility fan-out + one order per provider
-make demo-agent    # scripted agent tool loop, no LLM key needed
+make demo-agent    # scripted agent over MCP stdio, no LLM key needed
 make down
 ```
 
@@ -77,6 +82,9 @@ With the stack running and `LLM_API_KEY` set in `.env`:
 uv run aintegrator run "Check availability at Fictional Street 12, Madrid" --verbose
 uv run aintegrator chat
 ```
+
+The agent starts `python -m aintegrator_mcp_server` itself; `uv run aintegrator-mcp` starts the
+same stdio server for manual inspection.
 
 `make help` lists all targets. The only external dependency is the LLM API; unit tests and the
 agent test suite use a scripted client and need no key.

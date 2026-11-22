@@ -1,7 +1,7 @@
 # Architecture
 
-Phase 2 implements the provider-facing boundaries and the hand-written agent. Later phases fill in
-MCP transport, hard security controls, evals, RAG and deployment.
+Phase 3 implements the provider-facing boundaries, the hand-written agent and the MCP boundary.
+Later phases fill in hard security controls, evals, RAG and deployment.
 
 ```mermaid
 flowchart TD
@@ -115,19 +115,24 @@ sequence and its JSON result appended as a tool message. It returns an `AgentRes
 answer, the full message history, per-tool traces (arguments, result, latency, error flag) and token
 usage with an estimated cost.
 
-The default `ToolExecutor` is `InProcessTools`, which validates arguments with Pydantic, re-fetches
-offers from the service before writing (so the model cannot supply invented prices), and converts
-domain errors into structured JSON instead of leaking tracebacks. Phase 3 replaces this executor
-with an MCP client without touching the loop or prompts. Writes are *not* hard-gated yet: the system
-prompt asks the model to request confirmation, while phase 4 adds the server-side approval gate.
+The default `ToolExecutor` is `MCPToolExecutor`. It spawns `python -m aintegrator_mcp_server` over
+stdio, calls `list_tools` once to build the model's tool schemas, and maps each loop call to
+`call_tool`. The `FastMCP` server imports `integration` in-process (ADR 003); the agent never
+imports the server package, so import-linter enforces the protocol boundary. The old
+`InProcessTools` remains as a lightweight fallback for tests. Both executors delegate to
+`integration.tooling.ToolOperations`, so validation, offer re-fetching and structured errors have
+a single implementation. Writes are *not* hard-gated yet: the system prompt asks the model to
+request confirmation, while phase 4 adds the server-side approval gate.
 
 ## Testing layers
 
 - **Unit** (`make check`): no services, in-memory SQLite, fake gateways. Covers domain rules,
   mappers, resilience primitives, service idempotency, state-machine behavior, tool schemas, the
   agent loop and CLI wiring.
-- **Scripted demo** (`make demo-agent`): the real loop and tools against the live providers, driven
-  by a scripted LLM, so CI exercises the agent without an API key.
+- **MCP protocol** (`mcp_server/tests`): in-memory client/server sessions cover tool discovery,
+  schemas and the full order lifecycle; a stdio test runs against the live compose stack.
+- **Scripted demo** (`make demo-agent`): the real loop and MCP transport against the live
+  providers, driven by a scripted LLM, so CI exercises the agent without an API key.
 - **Contract** (`make contract-test`): real adapters against the three simulated providers;
   checks wire formats, auth, malformed responses, rate limits and unsupported operations.
 - **Integration** (`make integration-test`): real adapters plus webhook receiver and reconciler;

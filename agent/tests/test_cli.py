@@ -1,8 +1,10 @@
-"""CLI wiring without a real LLM provider."""
+"""CLI wiring without a real LLM provider or MCP subprocess."""
 
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 import pytest
@@ -17,9 +19,21 @@ def _drive(coroutine: object) -> object:
         return runner.run(coroutine)  # type: ignore[arg-type]
 
 
-class _StubService:
-    async def aclose(self) -> None:
-        return None
+class EchoTools:
+    def definitions(self) -> tuple[Any, ...]:
+        return ()
+
+    async def execute(self, call: Any) -> str:
+        return '{"ok": true}'
+
+
+def _fake_build_agent(loop: AgentLoop) -> Any:
+    @asynccontextmanager
+    async def fake(settings: AgentSettings) -> AsyncIterator[AgentLoop]:
+        del settings
+        yield loop
+
+    return fake
 
 
 def test_run_prints_answer_and_trace(
@@ -27,7 +41,7 @@ def test_run_prints_answer_and_trace(
 ) -> None:
     llm = ScriptedLLM([LLMReply(text="One offer found.")])
     loop = AgentLoop(llm, EchoTools())
-    monkeypatch.setattr(cli, "build_agent", lambda settings: (loop, _StubService(), llm))
+    monkeypatch.setattr(cli, "build_agent", _fake_build_agent(loop))
     monkeypatch.setattr(cli.asyncio, "run", _drive)
 
     assert cli.main(["run", "check coverage", "--verbose"]) == 0
@@ -41,19 +55,11 @@ def test_run_json_flag_emits_full_result(
 ) -> None:
     llm = ScriptedLLM([LLMReply(text="done")])
     loop = AgentLoop(llm, EchoTools())
-    monkeypatch.setattr(cli, "build_agent", lambda settings: (loop, _StubService(), llm))
+    monkeypatch.setattr(cli, "build_agent", _fake_build_agent(loop))
     monkeypatch.setattr(cli.asyncio, "run", _drive)
 
     assert cli.main(["run", "hello", "--json"]) == 0
     assert '"answer": "done"' in capsys.readouterr().out
-
-
-class EchoTools:
-    def definitions(self) -> tuple[Any, ...]:
-        return ()
-
-    async def execute(self, call: Any) -> str:
-        return '{"ok": true}'
 
 
 def test_settings_are_env_driven(monkeypatch: pytest.MonkeyPatch) -> None:

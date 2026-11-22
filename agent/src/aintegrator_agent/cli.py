@@ -71,12 +71,8 @@ async def _run_task(
     as_json: bool,
     verbose: bool,
 ) -> int:
-    loop, service, llm = build_agent(settings)
-    try:
+    async with build_agent(settings) as loop:
         result = await loop.run(task)
-    finally:
-        await llm.aclose()
-        await service.aclose()
 
     if as_json:
         print(json.dumps(result.as_dict(), ensure_ascii=False, indent=2))
@@ -88,9 +84,8 @@ async def _run_task(
 
 
 async def _chat(settings: AgentSettings, *, initial_task: str | None, verbose: bool) -> int:
-    loop, service, llm = build_agent(settings)
     history: tuple[Message, ...] = ()
-    try:
+    async with build_agent(settings) as loop:
         print("AIntegrator — type 'exit' or press Ctrl-D to quit.")
         pending = [initial_task] if initial_task else []
         while True:
@@ -108,9 +103,6 @@ async def _chat(settings: AgentSettings, *, initial_task: str | None, verbose: b
             print(f"agent> {result.answer}")
             if verbose:
                 _print_traces(result)
-    finally:
-        await llm.aclose()
-        await service.aclose()
     return 0
 
 
