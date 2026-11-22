@@ -1,5 +1,18 @@
-# Phase 0: only PostgreSQL with pgvector. Provider services, the MCP server,
-# webhook delivery and tracing are added in later phases.
+# Phase 1: PostgreSQL, the three simulated providers, the webhook receiver and
+# the database-driven reconciler. All data and credentials are fictional.
+x-integration-env: &integration-env
+  DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-aintegrator}:${POSTGRES_PASSWORD:-aintegrator}@postgres:5432/${POSTGRES_DB:-aintegrator}
+  FIBERNET_BASE_URL: http://fibernet:8001
+  LEGACYTEL_BASE_URL: http://legacytel:8002
+  SKYLINK_BASE_URL: http://skylink:8003
+  FIBERNET_CLIENT_ID: ${FIBERNET_CLIENT_ID:-fibernet-client}
+  FIBERNET_CLIENT_SECRET: ${FIBERNET_CLIENT_SECRET:-fibernet-secret}
+  LEGACYTEL_USERNAME: ${LEGACYTEL_USERNAME:-legacytel}
+  LEGACYTEL_PASSWORD: ${LEGACYTEL_PASSWORD:-legacytel-secret}
+  SKYLINK_API_KEY: ${SKYLINK_API_KEY:-skylink-key}
+  SKYLINK_WEBHOOK_SECRET: ${SKYLINK_WEBHOOK_SECRET:-skylink-secret}
+  WEBHOOK_RECEIVER_BASE_URL: http://webhook:8000
+
 services:
   postgres:
     image: pgvector/pgvector:pg16
@@ -18,5 +31,105 @@ services:
       timeout: 3s
       retries: 10
 
+  fibernet:
+    build:
+      context: .
+      dockerfile: Dockerfile.providers
+    container_name: aintegrator-fibernet
+    command: ["uvicorn", "aintegrator_fibernet.app:app", "--host", "0.0.0.0", "--port", "8001"]
+    environment:
+      FIBERNET_CLIENT_ID: ${FIBERNET_CLIENT_ID:-fibernet-client}
+      FIBERNET_CLIENT_SECRET: ${FIBERNET_CLIENT_SECRET:-fibernet-secret}
+    ports:
+      - "8001:8001"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/_control/state', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  legacytel:
+    build:
+      context: .
+      dockerfile: Dockerfile.providers
+    container_name: aintegrator-legacytel
+    command: ["python", "-m", "flask", "--app", "aintegrator_legacytel.app:app", "run", "--host", "0.0.0.0", "--port", "8002"]
+    environment:
+      LEGACYTEL_USERNAME: ${LEGACYTEL_USERNAME:-legacytel}
+      LEGACYTEL_PASSWORD: ${LEGACYTEL_PASSWORD:-legacytel-secret}
+    ports:
+      - "8002:8002"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/_control/state', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  skylink:
+    build:
+      context: .
+      dockerfile: Dockerfile.providers
+    container_name: aintegrator-skylink
+    command: >-
+      sh -c "python -m aintegrator_skylink.manage migrate --noinput &&
+      python -m aintegrator_skylink.manage runserver 0.0.0.0:8003 --noreload"
+    environment:
+      SKYLINK_API_KEY: ${SKYLINK_API_KEY:-skylink-key}
+      SKYLINK_WEBHOOK_SECRET: ${SKYLINK_WEBHOOK_SECRET:-skylink-secret}
+      SKYLINK_WEBHOOK_URL: http://webhook:8000/webhooks/skylink
+      SKYLINK_DB_PATH: /data/skylink.sqlite3
+    ports:
+      - "8003:8003"
+    volumes:
+      - skylink_data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8003/_control/state', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  webhook:
+    build:
+      context: .
+      dockerfile: Dockerfile.providers
+    container_name: aintegrator-webhook
+    working_dir: /app/integration
+    command: >-
+      sh -c "alembic -c alembic.ini upgrade head &&
+      uvicorn aintegrator_integration.webhooks.receiver:app --host 0.0.0.0 --port 8000"
+    environment:
+      <<: *integration-env
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/openapi.json', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  reconciler:
+    build:
+      context: .
+      dockerfile: Dockerfile.providers
+    container_name: aintegrator-reconciler
+    command: ["python", "-m", "aintegrator_integration.reconcile", "--interval", "10"]
+    environment:
+      <<: *integration-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      webhook:
+        condition: service_healthy
+      fibernet:
+        condition: service_healthy
+      legacytel:
+        condition: service_healthy
+      skylink:
+        condition: service_healthy
+
 volumes:
   postgres_data:
+  skylink_data:

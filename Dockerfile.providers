@@ -1,0 +1,14 @@
+# Shared runtime image for the simulated providers, the webhook receiver and
+# the reconciler. The uv workspace is installed once and commands are selected
+# per service in docker-compose.yml.
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+
+WORKDIR /app
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    PYTHONUNBUFFERED=1
+
+COPY . .
+RUN uv sync --all-packages --frozen
+
+ENV PATH="/app/.venv/bin:${PATH}"

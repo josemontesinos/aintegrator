@@ -10,12 +10,12 @@ All domain data is fictional. No real providers, telecom specifications or emplo
 ## Status
 
 This repository is built phase by phase; each phase ends with a green CI, an updated README and a
-git tag. **Current phase: 0 — scaffold (`v0.0-scaffold`).**
+git tag. **Current phase: 1 — providers + integration (`v0.1-integration`).**
 
 | Phase | Deliverable | Tag | Status |
 | --- | --- | --- | --- |
 | 0 | uv workspace, CI, Compose + Postgres, ADR template | `v0.0-scaffold` | done |
-| 1 | Providers + integration layer | `v0.1-integration` | planned |
+| 1 | Providers + integration layer | `v0.1-integration` | done |
 | 2 | Hand-written agent + CLI | `v0.2-agent` | planned |
 | 3 | MCP server + MCP client | `v0.3-mcp` | planned |
 | 4 | Security controls | `v0.4-security` | planned |
@@ -38,7 +38,16 @@ flowchart LR
 ```
 
 Dependencies flow one way; import-linter enforces this in CI. See
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for details and future sequence diagrams.
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for details and sequence diagrams.
+
+Phase 1 adds three in-memory simulated providers (FastAPI REST, Flask/SOAP 1.1, Django + DRF
+with signed webhooks), pure mappers and adapters, an async SQLAlchemy persistence layer with an
+Alembic migration, and a transport-agnostic `ConnectivityService`. Provider calls use timeouts,
+full-jitter retries, a circuit breaker, concurrency limits and a token-refresh path. Orders are
+persisted before any external call; ambiguous timeouts are reconciled via provider reference
+lookup instead of blindly retrying. Signed webhooks are stored raw and deduplicated before their
+events reach the state machine, and a DB-driven reconciler converges stale and `NEEDS_REVIEW`
+orders even when every webhook is lost.
 
 ## Quickstart
 
@@ -47,12 +56,19 @@ Requires Python 3.12, [uv](https://docs.astral.sh/uv/), Docker and GNU make.
 ```bash
 cp .env.example .env
 make install       # uv sync --all-packages
-make up            # docker compose up -d (PostgreSQL 16 + pgvector)
 make check         # lint, format, strict typing, import rules, unit tests
-uv run aintegrator --version
+make up            # build/start Postgres, 3 providers, webhook receiver, reconciler
+make service-test  # adapter contracts + webhook/reconciler workflows
+make demo          # eligibility fan-out + one order per provider
+make down
 ```
 
 `make help` lists all targets. The only external dependency is the LLM API (needed from phase 2).
+
+Useful local URLs: webhook receiver `http://localhost:8000/docs`, fibernet
+`http://localhost:8001/docs`, legacytel `http://localhost:8002/_control/state`, skylink
+`http://localhost:8003/api/v2/orders`. Provider `_control/*` endpoints are intentionally
+unauthenticated and local-only; never expose these services publicly.
 
 ## Evals
 

@@ -1,5 +1,6 @@
 """Simulated provider A: FastAPI REST/JSON with OAuth2 and idempotency."""
 
-__all__ = ["__version__"]
+from ._version import __version__
+from .app import app
 
-__version__ = "0.1.0"
+__all__ = ["__version__", "app"]

@@ -23,6 +23,7 @@ dev = [
     "mypy>=1.13",
     "import-linter>=2.0",
     "pyyaml>=6.0",
+    "aiosqlite>=0.20",
 ]
 
 [tool.ruff]
@@ -76,7 +77,8 @@ markers = [
     "integration: requires running services (docker compose)",
     "contract: adapter contract test against a simulated provider",
 ]
-addopts = "--strict-markers"
+# Unit-test default: services-backed tests opt in with `pytest -m 'contract or integration'`.
+addopts = "--strict-markers -m 'not contract and not integration'"
 
 [tool.coverage.run]
 branch = true

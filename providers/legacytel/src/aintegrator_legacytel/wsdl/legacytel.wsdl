@@ -1,0 +1,212 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions
+    xmlns="http://schemas.xmlsoap.org/wsdl/"
+    xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+    xmlns:tns="urn:legacytel:soap"
+    name="LegacyTelService"
+    targetNamespace="urn:legacytel:soap">
+  <documentation>
+    Fictional SOAP 1.1 service used to exercise a legacy XML adapter. All data is
+    simulated; prices use a comma decimal separator and dates are Paris local time.
+  </documentation>
+
+  <types>
+    <xsd:schema targetNamespace="urn:legacytel:soap" elementFormDefault="qualified">
+      <xsd:element name="CheckAvailability">
+        <xsd:complexType>
+          <xsd:sequence>
+            <xsd:element name="PostalCode" type="xsd:string"/>
+            <xsd:element name="Street" type="xsd:string"/>
+            <xsd:element name="Number" type="xsd:string"/>
+          </xsd:sequence>
+        </xsd:complexType>
+      </xsd:element>
+      <xsd:element name="PlaceOrder">
+        <xsd:complexType>
+          <xsd:sequence>
+            <xsd:element name="ExternalRef" type="xsd:string"/>
+            <xsd:element name="OfferId" type="xsd:string"/>
+            <xsd:element name="CustomerName" type="xsd:string"/>
+            <xsd:element name="CustomerEmail" type="xsd:string"/>
+            <xsd:element name="PostalCode" type="xsd:string"/>
+            <xsd:element name="Street" type="xsd:string"/>
+            <xsd:element name="Number" type="xsd:string"/>
+          </xsd:sequence>
+        </xsd:complexType>
+      </xsd:element>
+      <xsd:element name="GetOrderStatus">
+        <xsd:complexType>
+          <xsd:sequence>
+            <xsd:element name="OrderId" type="xsd:string"/>
+          </xsd:sequence>
+        </xsd:complexType>
+      </xsd:element>
+      <xsd:element name="FindOrdersByReference">
+        <xsd:complexType>
+          <xsd:sequence>
+            <xsd:element name="ExternalRef" type="xsd:string"/>
+          </xsd:sequence>
+        </xsd:complexType>
+      </xsd:element>
+
+      <xsd:complexType name="OfferType">
+        <xsd:sequence>
+          <xsd:element name="OfferId" type="xsd:string"/>
+          <xsd:element name="Name" type="xsd:string"/>
+          <xsd:element name="Price" type="xsd:string"/>
+          <xsd:element name="AvailableFrom" type="xsd:string" minOccurs="0"/>
+          <xsd:element name="Remarks" type="xsd:string" minOccurs="0"/>
+        </xsd:sequence>
+      </xsd:complexType>
+      <xsd:complexType name="OfferListType">
+        <xsd:sequence>
+          <xsd:element name="Offer" type="tns:OfferType" minOccurs="0" maxOccurs="unbounded"/>
+        </xsd:sequence>
+      </xsd:complexType>
+      <xsd:complexType name="OrderType">
+        <xsd:sequence>
+          <xsd:element name="ProviderOrderId" type="xsd:string" minOccurs="0"/>
+          <xsd:element name="ExternalRef" type="xsd:string" minOccurs="0"/>
+          <xsd:element name="StatusCode" type="xsd:int" minOccurs="0"/>
+          <xsd:element name="StatusText" type="xsd:string" minOccurs="0"/>
+          <xsd:element name="OrderDate" type="xsd:string" minOccurs="0"/>
+          <xsd:element name="Price" type="xsd:string" minOccurs="0"/>
+          <xsd:element name="Remarks" type="xsd:string" minOccurs="0"/>
+        </xsd:sequence>
+      </xsd:complexType>
+      <xsd:complexType name="OrderListType">
+        <xsd:sequence>
+          <xsd:element name="Order" type="tns:OrderType" minOccurs="0" maxOccurs="unbounded"/>
+        </xsd:sequence>
+      </xsd:complexType>
+
+      <xsd:element name="CheckAvailabilityResponse">
+        <xsd:complexType>
+          <xsd:sequence>
+            <xsd:element name="ResultCode" type="xsd:string"/>
+            <xsd:element name="ErrorCode" type="xsd:string"/>
+            <xsd:element name="ErrorText" type="xsd:string"/>
+            <xsd:element name="Offers" type="tns:OfferListType" minOccurs="0"/>
+          </xsd:sequence>
+        </xsd:complexType>
+      </xsd:element>
+      <xsd:element name="PlaceOrderResponse">
+        <xsd:complexType>
+          <xsd:sequence>
+            <xsd:element name="ResultCode" type="xsd:string"/>
+            <xsd:element name="ErrorCode" type="xsd:string"/>
+            <xsd:element name="ErrorText" type="xsd:string"/>
+            <xsd:element name="ProviderOrderId" type="xsd:string" minOccurs="0"/>
+            <xsd:element name="ExternalRef" type="xsd:string" minOccurs="0"/>
+            <xsd:element name="StatusCode" type="xsd:int" minOccurs="0"/>
+            <xsd:element name="StatusText" type="xsd:string" minOccurs="0"/>
+            <xsd:element name="OrderDate" type="xsd:string" minOccurs="0"/>
+            <xsd:element name="Price" type="xsd:string" minOccurs="0"/>
+            <xsd:element name="Remarks" type="xsd:string" minOccurs="0"/>
+          </xsd:sequence>
+        </xsd:complexType>
+      </xsd:element>
+      <xsd:element name="GetOrderStatusResponse">
+        <xsd:complexType>
+          <xsd:sequence>
+            <xsd:element name="ResultCode" type="xsd:string"/>
+            <xsd:element name="ErrorCode" type="xsd:string"/>
+            <xsd:element name="ErrorText" type="xsd:string"/>
+            <xsd:element name="ProviderOrderId" type="xsd:string" minOccurs="0"/>
+            <xsd:element name="ExternalRef" type="xsd:string" minOccurs="0"/>
+            <xsd:element name="StatusCode" type="xsd:int" minOccurs="0"/>
+            <xsd:element name="StatusText" type="xsd:string" minOccurs="0"/>
+            <xsd:element name="LastUpdated" type="xsd:string" minOccurs="0"/>
+            <xsd:element name="Remarks" type="xsd:string" minOccurs="0"/>
+          </xsd:sequence>
+        </xsd:complexType>
+      </xsd:element>
+      <xsd:element name="FindOrdersByReferenceResponse">
+        <xsd:complexType>
+          <xsd:sequence>
+            <xsd:element name="ResultCode" type="xsd:string"/>
+            <xsd:element name="ErrorCode" type="xsd:string"/>
+            <xsd:element name="ErrorText" type="xsd:string"/>
+            <xsd:element name="Count" type="xsd:int"/>
+            <xsd:element name="Orders" type="tns:OrderListType" minOccurs="0"/>
+          </xsd:sequence>
+        </xsd:complexType>
+      </xsd:element>
+    </xsd:schema>
+  </types>
+
+  <message name="CheckAvailabilityRequest">
+    <part name="parameters" element="tns:CheckAvailability"/>
+  </message>
+  <message name="CheckAvailabilityResponse">
+    <part name="parameters" element="tns:CheckAvailabilityResponse"/>
+  </message>
+  <message name="PlaceOrderRequest">
+    <part name="parameters" element="tns:PlaceOrder"/>
+  </message>
+  <message name="PlaceOrderResponse">
+    <part name="parameters" element="tns:PlaceOrderResponse"/>
+  </message>
+  <message name="GetOrderStatusRequest">
+    <part name="parameters" element="tns:GetOrderStatus"/>
+  </message>
+  <message name="GetOrderStatusResponse">
+    <part name="parameters" element="tns:GetOrderStatusResponse"/>
+  </message>
+  <message name="FindOrdersByReferenceRequest">
+    <part name="parameters" element="tns:FindOrdersByReference"/>
+  </message>
+  <message name="FindOrdersByReferenceResponse">
+    <part name="parameters" element="tns:FindOrdersByReferenceResponse"/>
+  </message>
+
+  <portType name="LegacyTelPortType">
+    <operation name="CheckAvailability">
+      <input message="tns:CheckAvailabilityRequest"/>
+      <output message="tns:CheckAvailabilityResponse"/>
+    </operation>
+    <operation name="PlaceOrder">
+      <input message="tns:PlaceOrderRequest"/>
+      <output message="tns:PlaceOrderResponse"/>
+    </operation>
+    <operation name="GetOrderStatus">
+      <input message="tns:GetOrderStatusRequest"/>
+      <output message="tns:GetOrderStatusResponse"/>
+    </operation>
+    <operation name="FindOrdersByReference">
+      <input message="tns:FindOrdersByReferenceRequest"/>
+      <output message="tns:FindOrdersByReferenceResponse"/>
+    </operation>
+  </portType>
+
+  <binding name="LegacyTelBinding" type="tns:LegacyTelPortType">
+    <soap:binding style="document" transport="http://schemas.xmlsoap.org/soap/http"/>
+    <operation name="CheckAvailability">
+      <soap:operation soapAction="urn:legacytel:soap/CheckAvailability"/>
+      <input><soap:body use="literal"/></input>
+      <output><soap:body use="literal"/></output>
+    </operation>
+    <operation name="PlaceOrder">
+      <soap:operation soapAction="urn:legacytel:soap/PlaceOrder"/>
+      <input><soap:body use="literal"/></input>
+      <output><soap:body use="literal"/></output>
+    </operation>
+    <operation name="GetOrderStatus">
+      <soap:operation soapAction="urn:legacytel:soap/GetOrderStatus"/>
+      <input><soap:body use="literal"/></input>
+      <output><soap:body use="literal"/></output>
+    </operation>
+    <operation name="FindOrdersByReference">
+      <soap:operation soapAction="urn:legacytel:soap/FindOrdersByReference"/>
+      <input><soap:body use="literal"/></input>
+      <output><soap:body use="literal"/></output>
+    </operation>
+  </binding>
+
+  <service name="LegacyTelService">
+    <port name="LegacyTelPort" binding="tns:LegacyTelBinding">
+      <soap:address location="http://localhost:8002/soap"/>
+    </port>
+  </service>
+</definitions>

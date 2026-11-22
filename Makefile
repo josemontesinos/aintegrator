@@ -2,7 +2,7 @@
 UV ?= uv
 
 .PHONY: help install lint format format-check typecheck importcheck test check \
-        up down compose-check demo clean
+        contract-test integration-test service-test up down compose-check demo clean
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "%-16s %s\n", $$1, $$2}'
@@ -28,10 +28,18 @@ importcheck: ## Enforce the one-way dependency rules
 test: ## Unit tests (no running services required)
 	$(UV) run pytest -q
 
+contract-test: ## Adapter contract tests (requires `make up`)
+	$(UV) run pytest -q -m contract
+
+integration-test: ## Webhook/reconciler workflow tests (requires `make up`)
+	$(UV) run pytest -q -m integration
+
+service-test: contract-test integration-test ## All service-backed tests
+
 check: lint format-check typecheck importcheck test ## All local checks (CI gate)
 
 up: ## Start local services
-	docker compose up -d
+	docker compose up -d --build --wait
 
 down: ## Stop local services
 	docker compose down
@@ -39,8 +47,8 @@ down: ## Stop local services
 compose-check: ## Validate docker-compose.yml without starting services
 	docker compose config -q
 
-demo: ## Placeholder; the real demo arrives in phase 1
-	@echo "Demo arrives in phase 1 (providers + integration)."
+demo: ## Run the Phase 1 eligibility/order demo (requires `make up`)
+	$(UV) run python -m aintegrator_integration.demo
 
 clean: ## Remove local caches
 	rm -rf .pytest_cache .mypy_cache .ruff_cache .hypothesis

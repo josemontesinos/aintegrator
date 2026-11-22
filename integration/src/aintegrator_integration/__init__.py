@@ -1,9 +1,16 @@
-"""Unified integration layer: domain model, provider gateways, application service.
+"""Unified integration layer: domain model, gateways, service and persistence."""
 
-Phase 0 is a scaffold. The domain model, adapters, persistence and resilience
-primitives are implemented in phase 1.
-"""
+from aintegrator_integration.config import Settings, get_settings
+from aintegrator_integration.factory import build_service, get_service
+from aintegrator_integration.service import ConnectivityService
 
-__all__ = ["__version__"]
+__all__ = [
+    "ConnectivityService",
+    "Settings",
+    "__version__",
+    "build_service",
+    "get_service",
+    "get_settings",
+]
 
 __version__ = "0.1.0"
