@@ -1,0 +1,87 @@
+# uv workspace root. Each package under providers/, plus integration/, mcp_server/,
+# agent/, evals/ and rag/, owns its own pyproject.toml and its own tests.
+[tool.uv.workspace]
+members = [
+    "providers/provider_common",
+    "providers/fibernet",
+    "providers/legacytel",
+    "providers/skylink",
+    "integration",
+    "mcp_server",
+    "agent",
+    "evals",
+    "rag",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=5.0",
+    "hypothesis>=6.112",
+    "ruff>=0.7",
+    "mypy>=1.13",
+    "import-linter>=2.0",
+    "pyyaml>=6.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+exclude = [".venv", "**/migrations/**"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true
+mypy_path = [
+    "providers/provider_common/src",
+    "providers/fibernet/src",
+    "providers/legacytel/src",
+    "providers/skylink/src",
+    "integration/src",
+    "mcp_server/src",
+    "agent/src",
+    "evals/src",
+    "rag/src",
+]
+
+# Strict only where the spec asks for it. Other packages get the defaults.
+[[tool.mypy.overrides]]
+module = ["aintegrator_integration", "aintegrator_integration.*", "aintegrator_agent", "aintegrator_agent.*"]
+strict = true
+
+# Libraries without type hints that later phases import.
+[[tool.mypy.overrides]]
+module = ["zeep.*", "flask.*", "django.*", "rest_framework.*", "mcp.*", "sentence_transformers.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = [
+    "providers",
+    "integration",
+    "mcp_server",
+    "agent",
+    "evals",
+    "rag",
+]
+norecursedirs = ["src", ".venv", ".git", "migrations"]
+markers = [
+    "integration: requires running services (docker compose)",
+    "contract: adapter contract test against a simulated provider",
+]
+addopts = "--strict-markers"
+
+[tool.coverage.run]
+branch = true
+source = ["aintegrator_integration"]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 85

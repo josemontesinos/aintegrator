@@ -1,0 +1,25 @@
+[project]
+name = "aintegrator-agent"
+version = "0.1.0"
+description = "Hand-written tool-calling agent and aintegrator CLI"
+requires-python = ">=3.12"
+dependencies = [
+    "aintegrator-integration",
+    "anthropic>=0.40",
+    "httpx>=0.27",
+    "mcp>=1.0",
+    "pydantic>=2.9",
+]
+
+[project.scripts]
+aintegrator = "aintegrator_agent.cli:main"
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/aintegrator_agent"]
+
+[tool.uv.sources]
+aintegrator-integration = { workspace = true }

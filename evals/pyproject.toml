@@ -1,0 +1,23 @@
+[project]
+name = "aintegrator-evals"
+version = "0.1.0"
+description = "State-based and trajectory evals for the agent"
+requires-python = ">=3.12"
+dependencies = [
+    "aintegrator-agent",
+    "aintegrator-integration",
+    "httpx>=0.27",
+    "pydantic>=2.9",
+    "pyyaml>=6.0",
+]
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/aintegrator_evals"]
+
+[tool.uv.sources]
+aintegrator-agent = { workspace = true }
+aintegrator-integration = { workspace = true }

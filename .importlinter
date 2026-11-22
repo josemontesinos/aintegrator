@@ -1,0 +1,87 @@
+; Dependency rules from section 4 of the technical specification.
+; One-way flow: user/CLI -> agent -> MCP protocol -> mcp_server -> integration -> HTTP -> providers.
+[importlinter]
+root_packages =
+    aintegrator_agent
+    aintegrator_integration
+    aintegrator_mcp_server
+    aintegrator_provider_common
+    aintegrator_fibernet
+    aintegrator_legacytel
+    aintegrator_skylink
+    aintegrator_evals
+    aintegrator_rag
+
+[importlinter:Agent never imports the MCP server]
+name = Agent talks to the MCP server over the MCP protocol only
+type = forbidden
+source_modules =
+    aintegrator_agent
+forbidden_modules =
+    aintegrator_mcp_server
+
+[importlinter:Integration is independent]
+name = Integration does not import upper layers or provider packages
+type = forbidden
+source_modules =
+    aintegrator_integration
+forbidden_modules =
+    aintegrator_agent
+    aintegrator_mcp_server
+    aintegrator_provider_common
+    aintegrator_fibernet
+    aintegrator_legacytel
+    aintegrator_skylink
+
+[importlinter:Fibernet depends only on common]
+name = Fibernet imports no other layer
+type = forbidden
+source_modules =
+    aintegrator_fibernet
+forbidden_modules =
+    aintegrator_integration
+    aintegrator_mcp_server
+    aintegrator_agent
+    aintegrator_legacytel
+    aintegrator_skylink
+    aintegrator_evals
+    aintegrator_rag
+
+[importlinter:Legacytel depends only on common]
+name = Legacytel imports no other layer
+type = forbidden
+source_modules =
+    aintegrator_legacytel
+forbidden_modules =
+    aintegrator_integration
+    aintegrator_mcp_server
+    aintegrator_agent
+    aintegrator_fibernet
+    aintegrator_skylink
+    aintegrator_evals
+    aintegrator_rag
+
+[importlinter:Skylink depends only on common]
+name = Skylink imports no other layer
+type = forbidden
+source_modules =
+    aintegrator_skylink
+forbidden_modules =
+    aintegrator_integration
+    aintegrator_mcp_server
+    aintegrator_agent
+    aintegrator_fibernet
+    aintegrator_legacytel
+    aintegrator_evals
+    aintegrator_rag
+
+[importlinter:MCP server does not import the agent]
+name = MCP server imports integration, not the agent or providers
+type = forbidden
+source_modules =
+    aintegrator_mcp_server
+forbidden_modules =
+    aintegrator_agent
+    aintegrator_fibernet
+    aintegrator_legacytel
+    aintegrator_skylink

@@ -1,0 +1,13 @@
+title = "AIntegrator gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Placeholders only: .env.example, docs and fixtures never contain real credentials"
+paths = [
+  '''\.env\.example$''',
+  '''^docs/''',
+  '''^evals/cases/''',
+  '''^rag/corpus/''',
+]
