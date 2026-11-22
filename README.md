@@ -10,7 +10,7 @@ All domain data is fictional. No real providers, telecom specifications or emplo
 ## Status
 
 This repository is built phase by phase; each phase ends with a green CI, an updated README and a
-git tag. **Current phase: 4 — security controls (`v0.4-security`).**
+git tag. **Current phase: 5 — evals (`v0.5-evals`).**
 
 | Phase | Deliverable | Tag | Status |
 | --- | --- | --- | --- |
@@ -19,7 +19,7 @@ git tag. **Current phase: 4 — security controls (`v0.4-security`).**
 | 2 | Hand-written agent + CLI | `v0.2-agent` | done |
 | 3 | MCP server + MCP client | `v0.3-mcp` | done |
 | 4 | Security controls | `v0.4-security` | done |
-| 5 | Evals (30+ cases, cassettes) | `v0.5-evals` | planned |
+| 5 | Evals (30+ cases, cassettes) | `v0.5-evals` | done |
 | 6 | RAG over provider docs | `v0.6-rag` | planned |
 | 7 | AWS/Terraform, tracing, cost report | `v1.0` | planned |
 
@@ -66,6 +66,12 @@ every tool call is audited with redacted payloads; the MCP server uses a least-p
 and the CLI's `--approve never|ask|auto` is enforced. See [docs/SECURITY.md](docs/SECURITY.md) for
 the threat model (ADRs 007–008).
 
+Phase 5 adds a deterministic eval suite: 34 YAML cases with checked-in LLM cassettes, run three
+times each against in-memory databases and simulated providers. State-based graders are the
+primary signal, with trajectory checks, forbidden-action/duplicate-order gates and an optional
+pinned LLM judge for answer rubrics. `make eval` compares stable metrics to a checked-in baseline;
+no API key or Docker stack is needed (ADR 009).
+
 ## Quickstart
 
 Requires Python 3.12, [uv](https://docs.astral.sh/uv/), Docker and GNU make.
@@ -74,6 +80,7 @@ Requires Python 3.12, [uv](https://docs.astral.sh/uv/), Docker and GNU make.
 cp .env.example .env
 make install       # uv sync --all-packages
 make check         # lint, format, strict typing, import rules, unit tests
+make eval          # 34 deterministic cases x 3 repeats, checked against a baseline
 make up            # build/start Postgres, 3 providers, webhook receiver, reconciler
 make service-test  # adapter contracts + webhook/reconciler workflows
 make demo          # eligibility fan-out + one order per provider
@@ -102,8 +109,8 @@ Set `MCP_TOOL_PROFILE=read-only` in `.env` to remove write tools from the server
 The agent starts `python -m aintegrator_mcp_server` itself; `uv run aintegrator-mcp` starts the
 same stdio server for manual inspection.
 
-`make help` lists all targets. The only external dependency is the LLM API; unit tests and the
-agent test suite use a scripted client and need no key.
+`make help` lists all targets. The only external dependency is the LLM API; unit tests, the agent
+test suite and the eval suite use scripted clients and need no key.
 
 Useful local URLs: webhook receiver `http://localhost:8000/docs`, fibernet
 `http://localhost:8001/docs`, legacytel `http://localhost:8002/_control/state`, skylink
@@ -112,9 +119,24 @@ unauthenticated and local-only; never expose these services publicly.
 
 ## Evals
 
-No eval results yet; the runner and the 30+ cases arrive in phase 5. The final table will report
-task success, forbidden-action rate, duplicate-order rate, recovery rate, steps, tokens, cost and
-latency p50/p95 against a checked-in baseline.
+`make eval` runs 34 cases × 3 repeats (102 runs) offline and fails on any case failure or stable-
+metric drift from [evals/baseline.json](evals/baseline.json). Current results:
+
+| Metric | Value |
+| --- | --- |
+| Task success | 1.00 |
+| Correct-tool rate | 1.00 |
+| Forbidden-action rate | 0.00 |
+| Approval compliance | 1.00 |
+| Duplicate-order rate | 0.00 |
+| Recovery rate | 1.00 |
+| Determinism rate | 1.00 |
+| Steps / tokens in / out | 2.76 / 387 / 124 |
+| Cost | $0.003 |
+| Latency p50 / p95 | ~17 / ~42 ms (reported, not gated) |
+
+See [docs/EVALS.md](docs/EVALS.md) for the case schema, scenarios and graders. Use
+`make eval-baseline` after an intentional behaviour change.
 
 ## Documentation
 
@@ -122,7 +144,7 @@ latency p50/p95 against a checked-in baseline.
 - [Decisions (ADRs)](docs/decisions/)
 - [Lessons learned](docs/lessons/)
 - [Security threat model](docs/SECURITY.md)
-- [Evals](docs/EVALS.md) (phase 5)
+- [Evals](docs/EVALS.md)
 
 ## License
 

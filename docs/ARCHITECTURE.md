@@ -1,7 +1,7 @@
 # Architecture
 
-Phase 4 implements the provider-facing boundaries, the hand-written agent, the MCP boundary and
-hard security controls. Later phases fill in evals, RAG and deployment.
+Phase 5 implements the provider-facing boundaries, the hand-written agent, the MCP boundary, hard
+security controls and deterministic evals. Later phases fill in RAG and deployment.
 
 ```mermaid
 flowchart TD
@@ -159,11 +159,47 @@ the least-privilege `aintegrator_mcp` role with no `DELETE`/`TRUNCATE` and appen
 `--approve never|ask|auto` is enforced by an agent-side wrapper that can only grant tokens a human
 has authorised. See [SECURITY.md](SECURITY.md) for the full threat model.
 
+## Eval harness (phase 5)
+
+`evals` is a separate workspace package that imports the agent and integration layers (never the
+server or providers). For every case and every repeat it creates a fresh in-memory SQLite database,
+a fresh set of `ScenarioGateway` provider replicas and a fresh `CassetteLLM`, then runs the *real*
+`AgentLoop`, `InProcessTools`, `ApprovalPolicyExecutor` and `ToolOperations` — including the full
+phase 4 policy. Only the LLM and provider transport are substituted, so the graded behaviour is
+the production decision path.
+
+```mermaid
+flowchart LR
+    YAML[cases.yaml] --> Loader[load_document]
+    Loader --> Replay[CassetteLLM]
+    Loader --> Harness[run_repeat]
+    Scenario[ScenarioGateway] --> Service[ConnectivityService]
+    Replay --> Loop[AgentLoop]
+    Harness --> Loop
+    Loop --> Tools[InProcessTools + ApprovalPolicyExecutor]
+    Tools --> Ops[ToolOperations + ToolSecurity]
+    Ops --> Service
+    Service --> DB[(in-memory SQLite)]
+    Ops --> Audit[(audit_log)]
+    Loop --> Graders[state / trajectory / answer graders]
+    DB --> Graders
+    Audit --> Graders
+    Graders --> Report[CaseResult x N]
+    Report --> Baseline[baseline.json gate]
+```
+
+`run_suite` repeats each case three times and `compute_metrics` derives task success, tool and
+forbidden-action rates, approval compliance, duplicate-order and recovery rates, determinism,
+steps, tokens, cost and latency percentiles. The CLI (`python -m aintegrator_evals`) exits non-zero
+on a case failure or a stable-metric drift; see [EVALS.md](EVALS.md) and ADR 009.
+
 ## Testing layers
 
 - **Unit** (`make check`): no services, in-memory SQLite, fake gateways. Covers domain rules,
   mappers, resilience primitives, service idempotency, state-machine behavior, tool schemas, the
-  agent loop and CLI wiring.
+  agent loop, CLI wiring and the eval harness itself (bindings, graders, baseline drift).
+- **Eval** (`make eval`): 34 YAML cases × 3 repeats over the real loop and tool boundary with
+  cassettes and simulated providers; gates stable metrics against a checked-in baseline.
 - **MCP protocol** (`mcp_server/tests`): in-memory client/server sessions cover tool discovery,
   schemas and the full order lifecycle; a stdio test runs against the live compose stack.
 - **Scripted demo** (`make demo-agent`): the real loop and MCP transport against the live
@@ -175,4 +211,4 @@ has authorised. See [SECURITY.md](SECURITY.md) for the full threat model.
 
 ## Decisions
 
-Phase 0 and 1 decisions are recorded in [docs/decisions](decisions/).
+Decisions 001–009 are recorded in [docs/decisions](decisions/).

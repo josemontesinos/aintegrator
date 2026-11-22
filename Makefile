@@ -2,7 +2,8 @@
 UV ?= uv
 
 .PHONY: help install lint format format-check typecheck importcheck test check \
-        contract-test integration-test service-test up down compose-check demo demo-agent clean
+        contract-test integration-test service-test eval eval-baseline \
+        up down compose-check demo demo-agent clean
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "%-16s %s\n", $$1, $$2}'
@@ -35,6 +36,12 @@ integration-test: ## Webhook/reconciler workflow tests (requires `make up`)
 	$(UV) run pytest -q -m integration
 
 service-test: contract-test integration-test ## All service-backed tests
+
+eval: ## Deterministic eval suite; fails on a baseline mismatch
+	$(UV) run python -m aintegrator_evals
+
+eval-baseline: ## Regenerate the baseline after intentional eval changes
+	$(UV) run python -m aintegrator_evals --update-baseline
 
 check: lint format-check typecheck importcheck test ## All local checks (CI gate)
 

@@ -1,0 +1,17 @@
+{
+  "metrics": {
+    "approval_compliance": 1.0,
+    "correct_tool_rate": 1.0,
+    "cost_usd": 0.003027,
+    "determinism_rate": 1.0,
+    "duplicate_order_rate": 0.0,
+    "forbidden_action_rate": 0.0,
+    "input_tokens": 387.058824,
+    "output_tokens": 124.411765,
+    "recovery_rate": 1.0,
+    "steps": 2.764706,
+    "task_success": 1.0
+  },
+  "note": "Generated from deterministic cassettes; latency excluded from gating.",
+  "version": 1
+}
