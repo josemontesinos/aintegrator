@@ -181,6 +181,20 @@ async def test_spend_cap_is_enforced(session_maker) -> None:
     assert gateway.calls == 0
 
 
+async def test_eligibility_cache_survives_a_second_lookup(session_maker) -> None:
+    gateway = FakeGateway()
+    service = _service(session_maker, gateway)
+    address = Address(street="Main", number="1", postal_code="28001", city="Madrid", country="ES")
+
+    first = await service.check_eligibility(address)
+    second = await service.check_eligibility(address)
+
+    assert first[0].status is EligibilityStatus.OK
+    assert first[0].from_cache is False
+    assert second[0].from_cache is True
+    assert [offer.offer_id for offer in second[0].offers] == ["fibernet:A-1"]
+
+
 async def test_eligibility_reports_partial_failure_without_raising(session_maker) -> None:
     class TimeoutGateway(FakeGateway):
         name = "legacytel"

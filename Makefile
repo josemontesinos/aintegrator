@@ -2,7 +2,7 @@
 UV ?= uv
 
 .PHONY: help install lint format format-check typecheck importcheck test check \
-        contract-test integration-test service-test up down compose-check demo clean
+        contract-test integration-test service-test up down compose-check demo demo-agent clean
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "%-16s %s\n", $$1, $$2}'
@@ -49,6 +49,9 @@ compose-check: ## Validate docker-compose.yml without starting services
 
 demo: ## Run the Phase 1 eligibility/order demo (requires `make up`)
 	$(UV) run python -m aintegrator_integration.demo
+
+demo-agent: ## Run the Phase 2 scripted agent demo (requires `make up`, no API key)
+	$(UV) run python -m aintegrator_agent.demo
 
 clean: ## Remove local caches
 	rm -rf .pytest_cache .mypy_cache .ruff_cache .hypothesis

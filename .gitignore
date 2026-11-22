@@ -19,3 +19,4 @@ evals/reports/*.json
 evals/reports/*.md
 !evals/reports/.gitkeep
 .DS_Store
+.idea/

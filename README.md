@@ -10,13 +10,13 @@ All domain data is fictional. No real providers, telecom specifications or emplo
 ## Status
 
 This repository is built phase by phase; each phase ends with a green CI, an updated README and a
-git tag. **Current phase: 1 — providers + integration (`v0.1-integration`).**
+git tag. **Current phase: 2 — hand-written agent + CLI (`v0.2-agent`).**
 
 | Phase | Deliverable | Tag | Status |
 | --- | --- | --- | --- |
 | 0 | uv workspace, CI, Compose + Postgres, ADR template | `v0.0-scaffold` | done |
 | 1 | Providers + integration layer | `v0.1-integration` | done |
-| 2 | Hand-written agent + CLI | `v0.2-agent` | planned |
+| 2 | Hand-written agent + CLI | `v0.2-agent` | done |
 | 3 | MCP server + MCP client | `v0.3-mcp` | planned |
 | 4 | Security controls | `v0.4-security` | planned |
 | 5 | Evals (30+ cases, cassettes) | `v0.5-evals` | planned |
@@ -49,6 +49,13 @@ lookup instead of blindly retrying. Signed webhooks are stored raw and deduplica
 events reach the state machine, and a DB-driven reconciler converges stale and `NEEDS_REVIEW`
 orders even when every webhook is lost.
 
+Phase 2 adds a hand-written tool-calling agent and the `aintegrator` CLI. The agent loop calls
+typed in-process tools (eligibility, order create/read/list/cancel) against `ConnectivityService`,
+records a trace of every call, and tracks token usage and estimated cost. The LLM boundary is an
+interface: tests use a deterministic scripted client, so `make check` needs no API key. The system
+prompt asks the model to confirm writes first; the hard server-side approval gate arrives in
+phase 4. Phase 3 replaces the in-process executor with an MCP client behind the same interface.
+
 ## Quickstart
 
 Requires Python 3.12, [uv](https://docs.astral.sh/uv/), Docker and GNU make.
@@ -60,10 +67,19 @@ make check         # lint, format, strict typing, import rules, unit tests
 make up            # build/start Postgres, 3 providers, webhook receiver, reconciler
 make service-test  # adapter contracts + webhook/reconciler workflows
 make demo          # eligibility fan-out + one order per provider
+make demo-agent    # scripted agent tool loop, no LLM key needed
 make down
 ```
 
-`make help` lists all targets. The only external dependency is the LLM API (needed from phase 2).
+With the stack running and `LLM_API_KEY` set in `.env`:
+
+```bash
+uv run aintegrator run "Check availability at Fictional Street 12, Madrid" --verbose
+uv run aintegrator chat
+```
+
+`make help` lists all targets. The only external dependency is the LLM API; unit tests and the
+agent test suite use a scripted client and need no key.
 
 Useful local URLs: webhook receiver `http://localhost:8000/docs`, fibernet
 `http://localhost:8001/docs`, legacytel `http://localhost:8002/_control/state`, skylink

@@ -1,8 +1,8 @@
-"""Smoke tests for the scaffolded agent package."""
+"""Smoke tests for the agent package and CLI surface."""
 
 import pytest
 from aintegrator_agent import __version__
-from aintegrator_agent.cli import main
+from aintegrator_agent.cli import build_parser, main
 
 
 def test_package_version() -> None:
@@ -14,6 +14,20 @@ def test_cli_help_exits_cleanly(capsys: pytest.CaptureFixture[str]) -> None:
     assert "aintegrator" in capsys.readouterr().out
 
 
-def test_cli_command_is_a_scaffold(capsys: pytest.CaptureFixture[str]) -> None:
-    assert main(["chat", "hello"]) == 0
-    assert "phase 2" in capsys.readouterr().out
+def test_run_parser_exposes_phase_2_flags() -> None:
+    args = build_parser().parse_args(["run", "check coverage", "--json", "--approve", "auto"])
+    assert args.command == "run"
+    assert args.json is True
+    assert args.approve == "auto"
+
+
+def test_chat_parser_exposes_initial_task(capsys: pytest.CaptureFixture[str]) -> None:
+    args = build_parser().parse_args(["chat", "hello"])
+    assert args.task == "hello"
+    assert args.verbose is False
+    assert capsys.readouterr().out == ""
+
+
+def test_approvals_is_still_a_phase_4_scaffold(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["approvals", "approve", "id-1"]) == 0
+    assert "phase 4" in capsys.readouterr().out

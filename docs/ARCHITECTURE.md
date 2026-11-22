@@ -1,7 +1,7 @@
 # Architecture
 
-Phase 1 implements the provider-facing boundaries. Later phases fill in MCP, the agent, evals,
-RAG and deployment.
+Phase 2 implements the provider-facing boundaries and the hand-written agent. Later phases fill in
+MCP transport, hard security controls, evals, RAG and deployment.
 
 ```mermaid
 flowchart TD
@@ -106,10 +106,28 @@ than `RECONCILE_AFTER_S`, asks the provider for its current truth via `get_order
 `find_by_reference`), and advances the local state. In production a Step Functions state machine
 complements this loop (ADR 004).
 
+## Agent loop (phase 2)
+
+The CLI builds `AgentLoop` with an `LLMClient` and a `ToolExecutor`. The default LLM client wraps
+`AsyncAnthropic`; tests and evals inject `ScriptedLLM`, so no key or network is needed. The loop is
+an explicit while-loop with a step budget: one LLM response per step, each tool call executed in
+sequence and its JSON result appended as a tool message. It returns an `AgentResult` containing the
+answer, the full message history, per-tool traces (arguments, result, latency, error flag) and token
+usage with an estimated cost.
+
+The default `ToolExecutor` is `InProcessTools`, which validates arguments with Pydantic, re-fetches
+offers from the service before writing (so the model cannot supply invented prices), and converts
+domain errors into structured JSON instead of leaking tracebacks. Phase 3 replaces this executor
+with an MCP client without touching the loop or prompts. Writes are *not* hard-gated yet: the system
+prompt asks the model to request confirmation, while phase 4 adds the server-side approval gate.
+
 ## Testing layers
 
 - **Unit** (`make check`): no services, in-memory SQLite, fake gateways. Covers domain rules,
-  mappers, resilience primitives, service idempotency and state-machine behavior.
+  mappers, resilience primitives, service idempotency, state-machine behavior, tool schemas, the
+  agent loop and CLI wiring.
+- **Scripted demo** (`make demo-agent`): the real loop and tools against the live providers, driven
+  by a scripted LLM, so CI exercises the agent without an API key.
 - **Contract** (`make contract-test`): real adapters against the three simulated providers;
   checks wire formats, auth, malformed responses, rate limits and unsupported operations.
 - **Integration** (`make integration-test`): real adapters plus webhook receiver and reconciler;

@@ -278,7 +278,13 @@ class Repository:
 
     async def get_cache(self, provider: str, cache_key: str) -> EligibilityResult | None:
         row = await self.session.get(EligibilityCacheRow, (provider, cache_key))
-        if row is None or row.expires_at <= datetime.now(UTC):
+        if row is None:
+            return None
+        expires_at = row.expires_at
+        # SQLite drops tzinfo even for DateTime(timezone=True); Postgres keeps it.
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=UTC)
+        if expires_at <= datetime.now(UTC):
             return None
         return EligibilityResult.model_validate(row.result_json).model_copy(
             update={"from_cache": True}
