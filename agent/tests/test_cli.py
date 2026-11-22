@@ -29,8 +29,8 @@ class EchoTools:
 
 def _fake_build_agent(loop: AgentLoop) -> Any:
     @asynccontextmanager
-    async def fake(settings: AgentSettings) -> AsyncIterator[AgentLoop]:
-        del settings
+    async def fake(settings: AgentSettings, **kwargs: object) -> AsyncIterator[AgentLoop]:
+        del settings, kwargs
         yield loop
 
     return fake

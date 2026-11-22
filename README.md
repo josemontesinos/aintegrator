@@ -3,14 +3,14 @@
 An AI agent that handles natural-language requests about connectivity services (eligibility,
 ordering, status, cancellation) across three deliberately inconsistent *simulated* providers.
 It demonstrates heterogeneous integration, reliable side-effecting actions, MCP, a hand-written
-tool-calling agent, server-side safety controls, evals, RAG and reproducible deployment.
+tool-calling agent, hard server-side safety controls, evals, RAG and reproducible deployment.
 
 All domain data is fictional. No real providers, telecom specifications or employer code are used.
 
 ## Status
 
 This repository is built phase by phase; each phase ends with a green CI, an updated README and a
-git tag. **Current phase: 3 — MCP server + MCP client (`v0.3-mcp`).**
+git tag. **Current phase: 4 — security controls (`v0.4-security`).**
 
 | Phase | Deliverable | Tag | Status |
 | --- | --- | --- | --- |
@@ -18,7 +18,7 @@ git tag. **Current phase: 3 — MCP server + MCP client (`v0.3-mcp`).**
 | 1 | Providers + integration layer | `v0.1-integration` | done |
 | 2 | Hand-written agent + CLI | `v0.2-agent` | done |
 | 3 | MCP server + MCP client | `v0.3-mcp` | done |
-| 4 | Security controls | `v0.4-security` | planned |
+| 4 | Security controls | `v0.4-security` | done |
 | 5 | Evals (30+ cases, cassettes) | `v0.5-evals` | planned |
 | 6 | RAG over provider docs | `v0.6-rag` | planned |
 | 7 | AWS/Terraform, tracing, cost report | `v1.0` | planned |
@@ -53,13 +53,18 @@ Phase 2 adds a hand-written tool-calling agent and the `aintegrator` CLI. The ag
 typed in-process tools (eligibility, order create/read/list/cancel) against `ConnectivityService`,
 records a trace of every call, and tracks token usage and estimated cost. The LLM boundary is an
 interface: tests use a deterministic scripted client, so `make check` needs no API key. The system
-prompt asks the model to confirm writes first; the hard server-side approval gate arrives in
-phase 4.
+prompt asks the model to confirm writes first.
 
 Phase 3 moves those tools behind a real MCP boundary. The FastMCP server calls `integration`
 in-process (ADR 003) and is launched by the agent over stdio; the agent discovers tools through
 `list_tools` and calls them through `call_tool`, with no import from the server package. Tool
 payload logic is shared in `integration.tooling`, and the MCP SDK is pinned to the 1.x line (ADR 006).
+
+Phase 4 adds hard controls that do not depend on the model: every write requires a single-use,
+parameter-bound, expiring approval granted by a human; tool profiles can remove writes entirely;
+every tool call is audited with redacted payloads; the MCP server uses a least-privilege DB role;
+and the CLI's `--approve never|ask|auto` is enforced. See [docs/SECURITY.md](docs/SECURITY.md) for
+the threat model (ADRs 007–008).
 
 ## Quickstart
 
@@ -80,8 +85,19 @@ With the stack running and `LLM_API_KEY` set in `.env`:
 
 ```bash
 uv run aintegrator run "Check availability at Fictional Street 12, Madrid" --verbose
-uv run aintegrator chat
+uv run aintegrator chat --approve ask
 ```
+
+Write tools return an approval ID rather than executing immediately. Grant it explicitly (or let
+`--approve auto` do so on your behalf), then the agent retries with the bound arguments:
+
+```bash
+uv run aintegrator approvals pending
+uv run aintegrator approvals approve <approval-id>
+uv run aintegrator run "Cancel order <id>" --approve never   # blocked, no write attempted
+```
+
+Set `MCP_TOOL_PROFILE=read-only` in `.env` to remove write tools from the server entirely.
 
 The agent starts `python -m aintegrator_mcp_server` itself; `uv run aintegrator-mcp` starts the
 same stdio server for manual inspection.
@@ -105,7 +121,7 @@ latency p50/p95 against a checked-in baseline.
 - [Architecture](docs/ARCHITECTURE.md)
 - [Decisions (ADRs)](docs/decisions/)
 - [Lessons learned](docs/lessons/)
-- [Security threat model](docs/SECURITY.md) (phase 4)
+- [Security threat model](docs/SECURITY.md)
 - [Evals](docs/EVALS.md) (phase 5)
 
 ## License

@@ -1,7 +1,7 @@
 # Architecture
 
-Phase 3 implements the provider-facing boundaries, the hand-written agent and the MCP boundary.
-Later phases fill in hard security controls, evals, RAG and deployment.
+Phase 4 implements the provider-facing boundaries, the hand-written agent, the MCP boundary and
+hard security controls. Later phases fill in evals, RAG and deployment.
 
 ```mermaid
 flowchart TD
@@ -120,9 +120,44 @@ stdio, calls `list_tools` once to build the model's tool schemas, and maps each 
 `call_tool`. The `FastMCP` server imports `integration` in-process (ADR 003); the agent never
 imports the server package, so import-linter enforces the protocol boundary. The old
 `InProcessTools` remains as a lightweight fallback for tests. Both executors delegate to
-`integration.tooling.ToolOperations`, so validation, offer re-fetching and structured errors have
-a single implementation. Writes are *not* hard-gated yet: the system prompt asks the model to
-request confirmation, while phase 4 adds the server-side approval gate.
+`integration.tooling.ToolOperations`, so validation, offer re-fetching, structured errors and the
+phase 4 security policy have a single implementation.
+
+## Security boundary (phase 4)
+
+`ToolOperations.execute` is the one choke point for every tool call. It applies the policy object
+from `integration.security` before touching the service:
+
+```mermaid
+sequenceDiagram
+    participant C as Agent / MCP client
+    participant T as ToolOperations.execute
+    participant S as integration.security
+    participant DB as PostgreSQL
+    participant V as ConnectivityService
+    C->>T: tool name + arguments
+    T->>S: check tool profile allow-list
+    T->>S: audit (redacted args hash, duration)
+    alt write tool
+        T->>S: ApprovalService.require(action, params)
+        alt no approval_id
+            S->>DB: insert PENDING approval
+            S-->>C: APPROVAL_REQUIRED + id + call_arguments
+        else approval_id
+            S->>DB: verify expiry + param hash, GRANTED -> CONSUMED
+        end
+    end
+    T->>V: validated call (spend caps + write rate limit)
+    V-->>T: domain result
+    T->>S: audit redacted result code
+    T-->>C: JSON
+```
+
+Approvals are single-use, parameter-bound and expiring (ADR 007). The MCP server connects through
+the least-privilege `aintegrator_mcp` role with no `DELETE`/`TRUNCATE` and append-only audit access
+(ADR 008). `Redactor` scrubs secrets from both the audit row and the tool traces the model sees;
+`--approve never|ask|auto` is enforced by an agent-side wrapper that can only grant tokens a human
+has authorised. See [SECURITY.md](SECURITY.md) for the full threat model.
 
 ## Testing layers
 

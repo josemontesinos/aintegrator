@@ -1,9 +1,10 @@
 """Hand-written tool-calling agent for AIntegrator.
 
-Phase 2 runs tools in-process; phase 3 swaps in an MCP client behind the same
-``ToolExecutor`` interface.
+Tools are reached over MCP behind the ``ToolExecutor`` interface; phase 4 adds
+a CLI approval policy on top of the server-side hard gate.
 """
 
+from aintegrator_agent.approval import ApprovalPolicyExecutor
 from aintegrator_agent.config import AgentSettings, get_agent_settings
 from aintegrator_agent.llm import AnthropicLLM, LLMClient, LLMReply, Message, ScriptedLLM
 from aintegrator_agent.loop import AgentLoop
@@ -16,6 +17,7 @@ __all__ = [
     "AgentResult",
     "AgentSettings",
     "AnthropicLLM",
+    "ApprovalPolicyExecutor",
     "CostModel",
     "InProcessTools",
     "LLMClient",

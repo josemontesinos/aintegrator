@@ -3,6 +3,7 @@
 from aintegrator_integration.domain.errors import (
     AIntegratorError,
     AmbiguousOutcome,
+    ApprovalDenied,
     ApprovalRequired,
     IdempotencyConflict,
     NotCancellable,
@@ -12,6 +13,7 @@ from aintegrator_integration.domain.errors import (
     ProviderRejected,
     ProviderTimeout,
     ProviderUnavailable,
+    ToolNotAllowed,
     UnsupportedOperation,
 )
 from aintegrator_integration.domain.model import (
@@ -42,6 +44,7 @@ __all__ = [
     "AIntegratorError",
     "Address",
     "AmbiguousOutcome",
+    "ApprovalDenied",
     "ApprovalRequired",
     "Capabilities",
     "Customer",
@@ -62,6 +65,7 @@ __all__ = [
     "ProviderTimeout",
     "ProviderUnavailable",
     "Technology",
+    "ToolNotAllowed",
     "UnsupportedOperation",
     "can_apply",
     "sanitize_untrusted_text",

@@ -14,6 +14,8 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
+from sqlalchemy.ext.asyncio import AsyncEngine
+
 from aintegrator_integration.config import Settings, get_settings
 from aintegrator_integration.domain import (
     Address,
@@ -64,21 +66,25 @@ class ConnectivityService:
         *,
         settings: Settings | None = None,
         clock: Clock | None = None,
+        engine: AsyncEngine | None = None,
     ) -> None:
         self.gateways = gateways
         self.session_maker = session_maker
         self.settings = settings or get_settings()
         self.clock: Clock = clock or SystemClock()
+        self._engine = engine
 
     def _utcnow(self) -> datetime:
         return datetime.now(UTC)
 
     async def aclose(self) -> None:
-        """Release gateway resources such as pooled HTTP connections."""
+        """Release gateway connections and an engine owned by this service."""
         for gateway in self.gateways.values():
             closer = getattr(gateway, "aclose", None)
             if callable(closer):
                 await closer()
+        if self._engine is not None:
+            await self._engine.dispose()
 
     @staticmethod
     def _intent_from_order(order: Order) -> OrderIntent:

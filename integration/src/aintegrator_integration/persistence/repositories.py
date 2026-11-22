@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from aintegrator_integration.domain import (
@@ -16,6 +17,7 @@ from aintegrator_integration.domain import (
     OrderStatus,
 )
 from aintegrator_integration.persistence.models import (
+    ApprovalRow,
     AuditLogRow,
     EligibilityCacheRow,
     EligibilityRequestRow,
@@ -27,6 +29,11 @@ from aintegrator_integration.persistence.models import (
 )
 
 __all__ = ["Repository"]
+
+
+def _aware(value: datetime) -> datetime:
+    """SQLite drops tzinfo from DateTime(timezone=True); Postgres keeps it."""
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value
 
 
 def _as_row(order: Order) -> OrderRow:
@@ -276,14 +283,86 @@ class Repository:
         )
         await self.session.flush()
 
+    # -- approvals (append-only in spirit: status transitions only) ------
+    async def create_approval(
+        self,
+        approval_id: UUID,
+        action: str,
+        params_hash: str,
+        summary: str,
+        status: str,
+        now: datetime,
+        expires_at: datetime,
+    ) -> ApprovalRow:
+        row = ApprovalRow(
+            id=approval_id,
+            action=action,
+            params_hash=params_hash,
+            summary=summary[:500],
+            status=status,
+            created_at=now,
+            expires_at=expires_at,
+            granted_at=None,
+        )
+        self.session.add(row)
+        await self.session.flush()
+        return row
+
+    async def get_approval(self, approval_id: UUID) -> ApprovalRow | None:
+        return await self.session.get(ApprovalRow, approval_id)
+
+    async def list_approvals(self, status: str | None = None, limit: int = 50) -> list[ApprovalRow]:
+        statement = (
+            select(ApprovalRow).order_by(ApprovalRow.created_at.desc()).limit(min(limit, 100))
+        )
+        if status is not None:
+            statement = statement.where(ApprovalRow.status == status)
+        return list((await self.session.execute(statement)).scalars().all())
+
+    async def set_approval_status(
+        self, approval_id: UUID, status: str, *, granted_at: datetime | None = None
+    ) -> None:
+        row = await self.session.get(ApprovalRow, approval_id)
+        if row is None:
+            raise ValueError(f"approval {approval_id} does not exist")
+        row.status = status
+        if granted_at is not None:
+            row.granted_at = granted_at
+        await self.session.flush()
+
+    async def grant_approval(self, approval_id: UUID, granted_at: datetime) -> bool:
+        """Atomically flip PENDING -> GRANTED; False means it was already decided."""
+        statement = (
+            update(ApprovalRow)
+            .where(ApprovalRow.id == approval_id, ApprovalRow.status == "PENDING")
+            .values(status="GRANTED", granted_at=granted_at)
+        )
+        result = cast(CursorResult[Any], await self.session.execute(statement))
+        return result.rowcount == 1
+
+    async def consume_approval(self, approval_id: UUID) -> bool:
+        """Atomically flip GRANTED -> CONSUMED; False means another call won the race."""
+        statement = (
+            update(ApprovalRow)
+            .where(ApprovalRow.id == approval_id, ApprovalRow.status == "GRANTED")
+            .values(status="CONSUMED")
+        )
+        result = cast(CursorResult[Any], await self.session.execute(statement))
+        return result.rowcount == 1
+
+    async def list_audit(self, run_id: str | None = None, limit: int = 50) -> list[AuditLogRow]:
+        statement = (
+            select(AuditLogRow).order_by(AuditLogRow.created_at.desc()).limit(min(limit, 100))
+        )
+        if run_id is not None:
+            statement = statement.where(AuditLogRow.run_id == run_id)
+        return list((await self.session.execute(statement)).scalars().all())
+
     async def get_cache(self, provider: str, cache_key: str) -> EligibilityResult | None:
         row = await self.session.get(EligibilityCacheRow, (provider, cache_key))
         if row is None:
             return None
-        expires_at = row.expires_at
-        # SQLite drops tzinfo even for DateTime(timezone=True); Postgres keeps it.
-        if expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=UTC)
+        expires_at = _aware(row.expires_at)
         if expires_at <= datetime.now(UTC):
             return None
         return EligibilityResult.model_validate(row.result_json).model_copy(

@@ -7,9 +7,13 @@ seeing a raw exception traceback.
 
 from __future__ import annotations
 
+from datetime import datetime
+from typing import Any
+
 __all__ = [
     "AIntegratorError",
     "AmbiguousOutcome",
+    "ApprovalDenied",
     "ApprovalRequired",
     "IdempotencyConflict",
     "NotCancellable",
@@ -19,6 +23,7 @@ __all__ = [
     "ProviderRejected",
     "ProviderTimeout",
     "ProviderUnavailable",
+    "ToolNotAllowed",
     "UnsupportedOperation",
 ]
 
@@ -97,7 +102,38 @@ class NotFound(AIntegratorError):
 
 
 class ApprovalRequired(AIntegratorError):
+    """A write was attempted without a granted approval token."""
+
     code = "APPROVAL_REQUIRED"
+    retryable = False
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        approval_id: str,
+        expires_at: datetime,
+        call_arguments: dict[str, Any],
+        summary: str = "",
+    ) -> None:
+        super().__init__(message)
+        self.approval_id = approval_id
+        self.expires_at = expires_at
+        self.call_arguments = call_arguments
+        self.summary = summary
+
+
+class ApprovalDenied(AIntegratorError):
+    """An approval was missing, expired, reused or bound to different parameters."""
+
+    code = "APPROVAL_DENIED"
+    retryable = False
+
+
+class ToolNotAllowed(AIntegratorError):
+    """The active tool profile does not expose this tool."""
+
+    code = "TOOL_NOT_ALLOWED"
     retryable = False
 
 

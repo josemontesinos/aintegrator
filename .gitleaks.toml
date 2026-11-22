@@ -10,4 +10,8 @@ paths = [
   '''^docs/''',
   '''^evals/cases/''',
   '''^rag/corpus/''',
+  '''^infra/postgres/''',
+  # Fictional local-only placeholder password for the least-privilege MCP role.
+  '''^integration/migrations/versions/0002_security_controls\.py$''',
+  '''^integration/src/aintegrator_integration/config\.py$''',
 ]

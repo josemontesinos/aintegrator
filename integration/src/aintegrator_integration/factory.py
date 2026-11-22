@@ -18,7 +18,7 @@ from aintegrator_integration.persistence import (
 from aintegrator_integration.resilience import AuditSink, Clock, ResilientHttpClient
 from aintegrator_integration.service import ConnectivityService
 
-__all__ = ["build_gateways", "build_service", "get_service"]
+__all__ = ["build_gateways", "build_mcp_service", "build_service", "get_service"]
 
 
 def make_audit_sink(session_maker: SessionMaker) -> AuditSink:
@@ -67,15 +67,27 @@ def build_service(
     *,
     clock: Clock | None = None,
     gateways: dict[str, ProviderGateway] | None = None,
+    database_url: str | None = None,
 ) -> ConnectivityService:
     config = settings or get_settings()
-    engine = make_engine(config.database_url)
+    engine = make_engine(database_url or config.database_url)
     session_maker = make_session_maker(engine)
     return ConnectivityService(
         gateways or build_gateways(config, clock=clock, session_maker=session_maker),
         session_maker,
         settings=config,
         clock=clock,
+        engine=engine,
+    )
+
+
+def build_mcp_service(
+    settings: Settings | None = None, *, clock: Clock | None = None
+) -> ConnectivityService:
+    """Build the MCP server's service using its least-privilege DB role."""
+    config = settings or get_settings()
+    return build_service(
+        config, clock=clock, database_url=config.mcp_database_url or config.database_url
     )
 
 

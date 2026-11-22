@@ -106,6 +106,7 @@ class ApprovalRow(Base):
     id: Mapped[UUID] = mapped_column(primary_key=True)
     action: Mapped[str] = mapped_column(String(60))
     params_hash: Mapped[str] = mapped_column(String(64))
+    summary: Mapped[str | None] = mapped_column(String(500), nullable=True)
     status: Mapped[str] = mapped_column(String(20))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

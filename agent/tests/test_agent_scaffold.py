@@ -28,6 +28,10 @@ def test_chat_parser_exposes_initial_task(capsys: pytest.CaptureFixture[str]) ->
     assert capsys.readouterr().out == ""
 
 
-def test_approvals_is_still_a_phase_4_scaffold(capsys: pytest.CaptureFixture[str]) -> None:
-    assert main(["approvals", "approve", "id-1"]) == 0
-    assert "phase 4" in capsys.readouterr().out
+def test_approvals_parser_exposes_pending_and_approve() -> None:
+    pending = build_parser().parse_args(["approvals", "pending"])
+    assert pending.approval_command == "pending"
+
+    approve = build_parser().parse_args(["approvals", "approve", "id-1"])
+    assert approve.approval_command == "approve"
+    assert approve.approval_id == "id-1"

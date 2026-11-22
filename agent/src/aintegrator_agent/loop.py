@@ -11,6 +11,8 @@ import json
 import time
 from collections.abc import Sequence
 
+from aintegrator_integration.security import Redactor
+
 from aintegrator_agent.llm import LLMClient, Message, ToolCall
 from aintegrator_agent.prompts import SYSTEM_PROMPT
 from aintegrator_agent.result import AgentResult, CostModel, ToolTrace, Usage
@@ -38,12 +40,14 @@ class AgentLoop:
         system_prompt: str = SYSTEM_PROMPT,
         max_steps: int = 8,
         cost_model: CostModel | None = None,
+        redactor: Redactor | None = None,
     ) -> None:
         self._llm = llm
         self._tools = tools
         self._system_prompt = system_prompt
         self._max_steps = max_steps
         self._cost_model = cost_model or CostModel()
+        self._redactor = redactor or Redactor()
 
     async def run(self, task: str, *, history: Sequence[Message] = ()) -> AgentResult:
         """Run one task, optionally continuing a conversation from ``history``."""
@@ -72,16 +76,18 @@ class AgentLoop:
                 started = time.perf_counter()
                 result_text = await self._execute(call)
                 duration_ms = (time.perf_counter() - started) * 1000
+                safe_arguments = self._redactor.value(dict(call.arguments))
+                safe_result = self._redactor.text(result_text)
                 traces.append(
                     ToolTrace(
                         name=call.name,
-                        arguments=dict(call.arguments),
-                        result=result_text,
+                        arguments=safe_arguments,
+                        result=safe_result,
                         duration_ms=duration_ms,
                         error=_failed(result_text),
                     )
                 )
-                messages.append(Message(role="tool", content=result_text, tool_call_id=call.id))
+                messages.append(Message(role="tool", content=safe_result, tool_call_id=call.id))
         else:
             reached_limit = True
             answer = answer or "I reached the step limit before completing the task."
@@ -104,7 +110,7 @@ class AgentLoop:
                     "ok": False,
                     "error": {
                         "code": "TOOL_EXECUTION_FAILED",
-                        "message": f"{type(exc).__name__}: {exc}",
+                        "message": self._redactor.text(f"{type(exc).__name__}: {exc}"),
                         "retryable": False,
                     },
                 }
