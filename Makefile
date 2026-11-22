@@ -3,6 +3,7 @@ UV ?= uv
 
 .PHONY: help install lint format format-check typecheck importcheck test check \
         contract-test integration-test service-test eval eval-baseline \
+        rag-index rag-eval rag-eval-baseline rag-ingest-postgres \
         up down compose-check demo demo-agent clean
 
 help: ## Show available targets
@@ -20,8 +21,8 @@ format: ## Format all Python files
 format-check: ## Verify formatting
 	$(UV) run ruff format --check .
 
-typecheck: ## mypy (strict for integration and agent) for all runtime packages
-	$(UV) run mypy -p aintegrator_integration -p aintegrator_agent -p aintegrator_mcp_server
+typecheck: ## mypy (strict for integration/agent/mcp, defaults for RAG)
+	$(UV) run mypy -p aintegrator_integration -p aintegrator_agent -p aintegrator_mcp_server -p aintegrator_rag
 
 importcheck: ## Enforce the one-way dependency rules
 	$(UV) run lint-imports
@@ -42,6 +43,18 @@ eval: ## Deterministic eval suite; fails on a baseline mismatch
 
 eval-baseline: ## Regenerate the baseline after intentional eval changes
 	$(UV) run python -m aintegrator_evals --update-baseline
+
+rag-index: ## Build the offline RAG index from the fictional corpus
+	$(UV) run python -m aintegrator_rag ingest
+
+rag-eval: rag-index ## Rebuild the index, then compare retrieval against the baseline
+	$(UV) run python -m aintegrator_rag eval
+
+rag-eval-baseline: rag-index ## Regenerate the retrieval baseline after a corpus change
+	$(UV) run python -m aintegrator_rag eval --update-baseline
+
+rag-ingest-postgres: ## Ingest the corpus into pgvector (requires `make up`; set RAG_DSN)
+	$(UV) run python -m aintegrator_rag ingest --dsn "$${RAG_DSN:-postgresql://aintegrator:aintegrator@localhost:5432/aintegrator}"
 
 check: lint format-check typecheck importcheck test ## All local checks (CI gate)
 

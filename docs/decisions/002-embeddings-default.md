@@ -23,4 +23,6 @@ dependency only in phase 6, not in the phase 0 workspace sync.
 ## Consequences
 
 Local runs are self-contained but slow on first download and need a model cache in Docker/AWS.
-The retrieval eval in phase 6 compares dense against hybrid with the same interface.
+The retrieval eval in phase 6 compares dense against hybrid with the same interface; for a stable,
+free CI baseline it selects the dependency-free `hash` embedder via `RAG_EMBEDDER=hash`, while the
+library default remains the local BGE model.

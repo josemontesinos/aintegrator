@@ -1,12 +1,17 @@
 [project]
 name = "aintegrator-rag"
-version = "0.1.0"
+version = "0.6.0"
 description = "Hybrid retrieval over fictional provider documentation"
 requires-python = ">=3.12"
 dependencies = [
+    "asyncpg>=0.29",
     "pydantic>=2.9",
     "pyyaml>=6.0",
 ]
+
+[project.optional-dependencies]
+# Heavy local embedding model; CI and offline evals use the built-in hash embedder.
+local = ["sentence-transformers>=3.0"]
 
 [build-system]
 requires = ["hatchling>=1.25"]
@@ -14,5 +19,3 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/aintegrator_rag"]
-
-# sentence-transformers and pgvector are added in phase 6 to keep phase 0 lean.

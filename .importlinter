@@ -75,6 +75,21 @@ forbidden_modules =
     aintegrator_evals
     aintegrator_rag
 
+[importlinter:RAG is independent]
+name = RAG imports no upper layers, providers or evals
+type = forbidden
+source_modules =
+    aintegrator_rag
+forbidden_modules =
+    aintegrator_agent
+    aintegrator_integration
+    aintegrator_mcp_server
+    aintegrator_evals
+    aintegrator_provider_common
+    aintegrator_fibernet
+    aintegrator_legacytel
+    aintegrator_skylink
+
 [importlinter:MCP server does not import the agent]
 name = MCP server imports integration, not the agent or providers
 type = forbidden

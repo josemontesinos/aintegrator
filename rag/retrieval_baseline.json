@@ -1,0 +1,22 @@
+{
+  "metrics": {
+    "dense": {
+      "mrr": 0.613095,
+      "ndcg_at_k": 0.612375,
+      "recall_at_k": 0.714286
+    },
+    "hybrid": {
+      "mrr": 0.797619,
+      "ndcg_at_k": 0.821254,
+      "recall_at_k": 0.928571
+    },
+    "lexical": {
+      "mrr": 0.859524,
+      "ndcg_at_k": 0.894127,
+      "recall_at_k": 1.0
+    }
+  },
+  "note": "Generated from the deterministic hash embedder; corpus changes require a refresh.",
+  "top_k": 5,
+  "version": 1
+}

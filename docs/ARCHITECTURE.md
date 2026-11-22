@@ -1,7 +1,8 @@
 # Architecture
 
-Phase 5 implements the provider-facing boundaries, the hand-written agent, the MCP boundary, hard
-security controls and deterministic evals. Later phases fill in RAG and deployment.
+Phase 6 implements the provider-facing boundaries, the hand-written agent, the MCP boundary, hard
+security controls, deterministic evals and RAG. The final phase adds AWS/Terraform, tracing and a
+cost report.
 
 ```mermaid
 flowchart TD
@@ -18,6 +19,8 @@ flowchart TD
     receiver --> pg
     reconciler[Reconciler] --> service
     reconciler --> pg
+    rag[RAG package + CLI] -->|pgvector / offline index| pg
+    rag --> docs[Corpus: fictional provider docs]
 ```
 
 ## Dependency rules (enforced by import-linter)
@@ -27,7 +30,9 @@ flowchart TD
 - `integration` never imports `agent`, `mcp_server` or provider packages; it reaches providers
   only over HTTP/SOAP. Pure DTOs and mappers keep provider wire formats out of the domain.
 - Each provider package imports only `provider_common`.
-- `evals` and `rag` may import what they need.
+- `evals` imports the agent and integration layers, never the server or providers.
+- `rag` is a leaf package: it imports no other workspace layer (enforced by import-linter), so
+  retrieval can later be exposed by any layer without creating a dependency cycle.
 
 ## Repository layout
 
@@ -193,13 +198,40 @@ forbidden-action rates, approval compliance, duplicate-order and recovery rates,
 steps, tokens, cost and latency percentiles. The CLI (`python -m aintegrator_evals`) exits non-zero
 on a case failure or a stable-metric drift; see [EVALS.md](EVALS.md) and ADR 009.
 
+## RAG pipeline (phase 6)
+
+`rag` is a leaf workspace package. `load_corpus` parses four fictional markdown documents with
+YAML front matter and `chunk_documents` splits them by heading into overlapping windows with stable
+`doc_id::slug::position` IDs. An `Embedder` produces unit-length vectors: a deterministic hashing
+default for CI and an optional local `BAAI/bge-small-en-v1.5` model (ADR 002). `InMemoryStore`
+serves offline CLI/evals, while `PgVectorStore` binds parameters to pgvector cosine distance and a
+generated `tsvector` column; both fuse dense and lexical rankings with the same RRF helper.
+
+```mermaid
+flowchart LR
+    corpus[rag/corpus/*.md] --> Chunk[chunk_documents]
+    Chunk --> Embed[Embedder: hash or BGE]
+    Embed --> Store[InMemoryStore or PgVectorStore]
+    Query[User question] --> Retrieve[Retriever]
+    Retrieve --> Store
+    Store --> Hits[dense / lexical / hybrid hits]
+    Hits --> Answer[extractive answer + [n] citations]
+    Hits --> Eval[14-query baseline gate]
+```
+
+Retrieved text is untrusted data: the answer path quotes snippets and renders a source list, and
+the RAG package exposes no write tool. See [RAG.md](RAG.md) and ADR 010.
+
 ## Testing layers
 
 - **Unit** (`make check`): no services, in-memory SQLite, fake gateways. Covers domain rules,
   mappers, resilience primitives, service idempotency, state-machine behavior, tool schemas, the
-  agent loop, CLI wiring and the eval harness itself (bindings, graders, baseline drift).
+  agent loop, CLI wiring, eval harness (bindings, graders, baseline drift) and RAG corpus,
+  embedders, stores, rank fusion and graders.
 - **Eval** (`make eval`): 34 YAML cases × 3 repeats over the real loop and tool boundary with
   cassettes and simulated providers; gates stable metrics against a checked-in baseline.
+- **Retrieval eval** (`make rag-eval`): rebuilds the offline index, then runs 14 queries × 3 modes;
+  gates recall@5, MRR and nDCG@5 against `rag/retrieval_baseline.json`.
 - **MCP protocol** (`mcp_server/tests`): in-memory client/server sessions cover tool discovery,
   schemas and the full order lifecycle; a stdio test runs against the live compose stack.
 - **Scripted demo** (`make demo-agent`): the real loop and MCP transport against the live
@@ -207,8 +239,9 @@ on a case failure or a stable-metric drift; see [EVALS.md](EVALS.md) and ADR 009
 - **Contract** (`make contract-test`): real adapters against the three simulated providers;
   checks wire formats, auth, malformed responses, rate limits and unsupported operations.
 - **Integration** (`make integration-test`): real adapters plus webhook receiver and reconciler;
-  checks signature rejection, dedupe, out-of-order events and recovery when every webhook is lost.
+  checks signature rejection, dedupe, out-of-order events and recovery when every webhook is lost,
+  and exercises pgvector ingestion plus all three retrieval modes against PostgreSQL 16.
 
 ## Decisions
 
-Decisions 001–009 are recorded in [docs/decisions](decisions/).
+Decisions 001–010 are recorded in [docs/decisions](decisions/).

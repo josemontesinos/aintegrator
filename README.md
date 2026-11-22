@@ -10,7 +10,7 @@ All domain data is fictional. No real providers, telecom specifications or emplo
 ## Status
 
 This repository is built phase by phase; each phase ends with a green CI, an updated README and a
-git tag. **Current phase: 5 — evals (`v0.5-evals`).**
+git tag. **Current phase: 6 — RAG (`v0.6-rag`).**
 
 | Phase | Deliverable | Tag | Status |
 | --- | --- | --- | --- |
@@ -20,7 +20,7 @@ git tag. **Current phase: 5 — evals (`v0.5-evals`).**
 | 3 | MCP server + MCP client | `v0.3-mcp` | done |
 | 4 | Security controls | `v0.4-security` | done |
 | 5 | Evals (30+ cases, cassettes) | `v0.5-evals` | done |
-| 6 | RAG over provider docs | `v0.6-rag` | planned |
+| 6 | RAG over provider docs | `v0.6-rag` | done |
 | 7 | AWS/Terraform, tracing, cost report | `v1.0` | planned |
 
 ## Architecture
@@ -72,6 +72,12 @@ primary signal, with trajectory checks, forbidden-action/duplicate-order gates a
 pinned LLM judge for answer rubrics. `make eval` compares stable metrics to a checked-in baseline;
 no API key or Docker stack is needed (ADR 009).
 
+Phase 6 adds RAG over four fictional provider documents: deterministic chunking and embeddings,
+dense / lexical / hybrid retrieval behind one interface (pgvector in Postgres, in-memory store
+offline), and extractive answers with verifiable citations. The 14-query retrieval eval compares
+dense against hybrid and gates the checked-in baseline. Provider text is always quoted as data,
+never followed as instructions (ADR 010).
+
 ## Quickstart
 
 Requires Python 3.12, [uv](https://docs.astral.sh/uv/), Docker and GNU make.
@@ -81,6 +87,7 @@ cp .env.example .env
 make install       # uv sync --all-packages
 make check         # lint, format, strict typing, import rules, unit tests
 make eval          # 34 deterministic cases x 3 repeats, checked against a baseline
+make rag-eval      # build the offline index, then gate dense/lexical/hybrid retrieval
 make up            # build/start Postgres, 3 providers, webhook receiver, reconciler
 make service-test  # adapter contracts + webhook/reconciler workflows
 make demo          # eligibility fan-out + one order per provider
@@ -110,7 +117,9 @@ The agent starts `python -m aintegrator_mcp_server` itself; `uv run aintegrator-
 same stdio server for manual inspection.
 
 `make help` lists all targets. The only external dependency is the LLM API; unit tests, the agent
-test suite and the eval suite use scripted clients and need no key.
+test suite, the eval suite and the RAG pipeline use scripted clients or a deterministic offline
+embedder and need no key. The local BGE embedder is optional: `uv sync --all-packages --extra local`
+and `RAG_EMBEDDER=local`.
 
 Useful local URLs: webhook receiver `http://localhost:8000/docs`, fibernet
 `http://localhost:8001/docs`, legacytel `http://localhost:8002/_control/state`, skylink
@@ -138,6 +147,21 @@ metric drift from [evals/baseline.json](evals/baseline.json). Current results:
 See [docs/EVALS.md](docs/EVALS.md) for the case schema, scenarios and graders. Use
 `make eval-baseline` after an intentional behaviour change.
 
+## RAG
+
+`make rag-eval` rebuilds the offline index and runs 14 retrieval queries over 21 fictional chunks
+in three modes, gating the checked-in [retrieval baseline](rag/retrieval_baseline.json):
+
+| Mode | recall@5 | MRR | nDCG@5 |
+| --- | --- | --- | --- |
+| dense | 0.714 | 0.613 | 0.612 |
+| lexical | 1.000 | 0.860 | 0.894 |
+| hybrid | 0.929 | 0.798 | 0.821 |
+
+Hybrid recovers 3 queries dense misses. Answers are extractive and carry `[n]` citations back to
+document, section, provider and chunk ID. See [docs/RAG.md](docs/RAG.md) for the corpus format,
+chunking, stores, embedder options and the pgvector service test.
+
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
@@ -145,6 +169,7 @@ See [docs/EVALS.md](docs/EVALS.md) for the case schema, scenarios and graders. U
 - [Lessons learned](docs/lessons/)
 - [Security threat model](docs/SECURITY.md)
 - [Evals](docs/EVALS.md)
+- [RAG](docs/RAG.md)
 
 ## License
 

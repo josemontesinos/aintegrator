@@ -33,6 +33,18 @@ jobs:
       - run: uv sync --all-packages --frozen
       - run: make eval
 
+  rag:
+    name: deterministic retrieval eval
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv python install 3.12
+      - run: uv sync --all-packages --frozen
+      - run: make rag-eval
+
   contracts:
     name: provider contracts and demo
     runs-on: ubuntu-latest

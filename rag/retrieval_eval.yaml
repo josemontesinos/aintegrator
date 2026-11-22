@@ -1,0 +1,68 @@
+# Retrieval questions for phase 6. `relevant` contains stable chunk-ID prefixes
+# (doc id + heading slug + position), so wording edits do not invalidate the eval.
+version: 1
+top_k: 5
+queries:
+  - id: cancel-fibernet
+    query: "Can I cancel a fibernet order?"
+    relevant: [fibernet-guide::cancellation]
+    tags: [cancellation, fibernet]
+  - id: no-cancellation-providers
+    query: "Which fictional providers do not support order cancellation?"
+    relevant:
+      - legacytel-guide::reference-lookup-and-cancellation
+      - skylink-guide::cancellation-and-failure-handling
+    tags: [cancellation, multi]
+  - id: skylink-webhooks
+    query: "How are Skylink webhook signatures verified?"
+    relevant: [skylink-guide::webhooks-and-signature-verification]
+    tags: [webhooks, skylink]
+  - id: fibre-plus-price
+    query: "What is the monthly price of Fibre Plus?"
+    relevant: [fibernet-guide::offers-and-pricing]
+    tags: [pricing, fibernet]
+  - id: lost-placeorder
+    query: "How do I find a Legacytel order after a lost PlaceOrder response?"
+    relevant:
+      - legacytel-guide::reference-lookup-and-cancellation
+      - legacytel-guide::ordering
+    tags: [recovery, legacytel]
+  - id: approval-rules
+    query: "When is a human approval required for a write tool?"
+    relevant: [shared-policies::approval-policy]
+    tags: [security, shared]
+  - id: duplicate-orders
+    query: "How do we prevent duplicate orders on a retry?"
+    relevant: [shared-policies::idempotency-and-duplicate-orders]
+    tags: [security, shared]
+  - id: spend-cap
+    query: "What happens to an order above the per-order spend cap?"
+    relevant: [shared-policies::spend-controls]
+    tags: [security, shared]
+  - id: untrusted-text
+    query: "How should an assistant treat instruction-like text in provider notes?"
+    relevant:
+      - shared-policies::data-handling-and-untrusted-text
+      - fibernet-guide::maintenance-and-support
+      - skylink-guide::cancellation-and-failure-handling
+    tags: [security, multi]
+  - id: skylink-coverage
+    query: "Which districts does Skylink cover?"
+    relevant: [skylink-guide::coverage-and-eligibility]
+    tags: [eligibility, skylink]
+  - id: fibernet-maintenance
+    query: "When is Fibernet planned maintenance?"
+    relevant: [fibernet-guide::maintenance-and-support]
+    tags: [operations, fibernet]
+  - id: grounding-citations
+    query: "How must a grounded answer cite its sources?"
+    relevant: [shared-policies::answer-grounding]
+    tags: [quality, shared]
+  - id: legacytel-cache
+    query: "Should Legacytel eligibility results be cached?"
+    relevant: [legacytel-guide::coverage-and-eligibility]
+    tags: [eligibility, legacytel]
+  - id: skylink-offer-id
+    query: "What format do Skylink offer IDs use?"
+    relevant: [skylink-guide::offers-and-pricing]
+    tags: [ordering, skylink]
